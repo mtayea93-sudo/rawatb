@@ -158,7 +158,7 @@ const LS_KEY = 'rawatb_db_v1';
 const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 let DB = null;
 let ME_IN = false;
-let CUR = { tab: 'home', payMonth: null, repMonth: null, repAll: false };
+let CUR = { tab: 'home', payMonth: null, repMonth: null, repAll: false, empPage: null };
 
 function defDB() {
   return {
@@ -385,9 +385,10 @@ function renderTabs() {
   $('#tabs').innerHTML = TABS.map(([k, l]) =>
     `<button class="${CUR.tab === k ? 'on' : ''}" onclick="go('${k}')">${l}</button>`).join('');
 }
-function go(tab) { CUR.tab = tab; renderTabs(); render(); window.scrollTo({ top: 0 }); }
+function go(tab) { CUR.tab = tab; CUR.empPage = null; renderTabs(); render(); window.scrollTo({ top: 0 }); }
 function render() {
   const m = $('#main');
+  if (CUR.empPage) { m.innerHTML = vEmpProfile(CUR.empPage); return; }
   if (CUR.tab === 'home') m.innerHTML = vHome();
   else if (CUR.tab === 'emps') m.innerHTML = vEmps();
   else if (CUR.tab === 'pay') { m.innerHTML = vPay(); bindPayCalc(); }
@@ -442,7 +443,7 @@ function vEmps() {
     ${DB.employees.length ? DB.employees.map(e => `
       <div class="emp-row">
         ${e.photo ? `<div class="av" style="padding:0;overflow:hidden"><img src="${e.photo}" alt="" style="width:100%;height:100%;object-fit:cover"></div>` : `<div class="av">${esc(e.name.trim()[0] || '؟')}</div>`}
-        <div class="info"><b>${esc(e.name)}</b>
+        <div class="info"><b style="cursor:pointer;color:var(--acc)" onclick="empProfile('${e.id}')">${esc(e.name)} 👤</b>
           <span>الراتب: ${fmt(e.salary)} ج.م${e.phone ? ' · 📱 ' + esc(e.phone) : ''}${e.qr ? ' · 📷 له QR تحويل' : ''}${e.active === false ? ' · متوقف' : ''}</span></div>
         <div class="rowbtns">
           <button class="btn btn-o btn-sm" onclick="empModal('${e.id}')">تعديل</button>
@@ -450,6 +451,64 @@ function vEmps() {
         </div>
       </div>`).join('') : '<div class="empty">مفيش موظفين لسه — دوس «جديد» عشان تضيف أول موظف</div>'}
   </div>`;
+}
+/* ===================== ملف الموظف ===================== */
+function empProfile(id) { CUR.empPage = id; render(); window.scrollTo({ top: 0 }); }
+function vEmpProfile(id) {
+  const e = DB.employees.find(x => x.id === id);
+  if (!e) { CUR.empPage = null; return '<div class="card"><div class="empty">الموظف مش موجود — ارجع للموظفين</div></div>'; }
+  const pays = DB.pays.filter(p => p.empId === id);
+  const last = [...pays].sort((a, b) => (b.payDate || '').localeCompare(a.payDate || ''))[0];
+  const totalPaid = pays.reduce((a, p) => a + num(p.net), 0);
+  const r = num(e.raiseRate);
+  const raised = r > 0 ? Math.round(num(e.salary) * (1 + r / 100) * 100) / 100 : null;
+  return `
+  <div class="card" style="text-align:center">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;text-align:right">
+      <button class="btn btn-o btn-sm" onclick="go('emps')">→ رجوع للموظفين</button>
+      <span class="chip">${e.active === false ? 'متوقف' : 'شغال ✅'}</span>
+    </div>
+    ${e.photo ? `<div class="av" style="padding:0;overflow:hidden;width:96px;height:96px;border-radius:50%;margin:0 auto 12px;font-size:2.2rem"><img src="${e.photo}" alt="" style="width:100%;height:100%;object-fit:cover"></div>` : `<div class="av" style="width:96px;height:96px;border-radius:50%;margin:0 auto 12px;font-size:2.2rem">${esc(e.name.trim()[0] || '؟')}</div>`}
+    <h2 style="margin:0 0 4px">${esc(e.name)}</h2>
+    <p class="muted">${e.phone ? '📱 ' + esc(e.phone) + ' · ' : ''}${e.qr ? '📷 له QR تحويل' : 'مفيش QR تحويل'}</p>
+  </div>
+  <div class="card">
+    <h3>💰 الراتب والزيادة</h3>
+    <div class="grid2">
+      <div class="field"><label>الراتب الأساسي الحالي (ج.م)</label><input class="inp" value="${fmt(e.salary)}" disabled></div>
+      <div class="field"><label>معدل الزيادة (%)</label><input class="inp" id="pf-raise" inputmode="decimal" placeholder="مثال: 10" value="${e.raiseRate || ''}"></div>
+      <div class="field"><label>نوع الزيادة</label>
+        <select class="inp" id="pf-raisetype">
+          <option value="annual" ${e.raiseType === 'annual' ? 'selected' : ''}>سنوية 📅</option>
+          <option value="monthly" ${e.raiseType === 'monthly' ? 'selected' : ''}>شهرية 🔄</option>
+        </select></div>
+      <div class="field"><label>متعين من إمتى 🗓️</label><input type="date" class="inp" id="pf-hire" value="${e.hireDate || ''}"></div>
+    </div>
+    ${raised !== null ? `<div class="netpill" style="margin-top:6px">${fmt(raised)} ج.م<small>الراتب لو الزيادة (${r}%) اتطبقت مرة واحدة</small></div>` : ''}
+    <p class="muted" style="font-size:.72rem;margin-top:10px">⚠️ الحقول دي بتتغير من هنا بس — بتتحفظ في ملف الموظف وعلى السحابة.</p>
+    <button class="btn btn-p" style="width:100%;margin-top:10px" onclick="saveEmpProfile('${e.id}')">💾 حفظ بيانات الملف</button>
+  </div>
+  <div class="card">
+    <h3>🧾 آخر قبض</h3>
+    ${last ? `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div><span class="muted" style="font-size:.78rem">آخر مرتب قبضه — ${monthLabel(last.month)}</span>
+        <div style="font-size:1.5rem;font-weight:800;color:var(--green)">${fmt(last.net)} ج.م</div>
+        <span class="muted" style="font-size:.75rem">بتاريخ ${last.payDate || '—'}</span></div>
+        <div style="text-align:left">
+          <div class="chip green">قبض ${pays.length} مرة</div>
+          <div style="margin-top:8px"><span class="muted" style="font-size:.72rem">إجمالي المقبوض: </span><b>${fmt(totalPaid)} ج.م</b></div>
+        </div>
+      </div>` : '<div class="empty">لسه ما قبضش أي مرتب — أول ما تسجل قبض هيظهر هنا</div>'}
+  </div>`;
+}
+function saveEmpProfile(id) {
+  const e = DB.employees.find(x => x.id === id); if (!e) return;
+  e.raiseRate = num($('#pf-raise').value);
+  e.raiseType = $('#pf-raisetype').value;
+  e.hireDate = $('#pf-hire').value;
+  save(); render();
+  toast('تم حفظ ملف الموظف ✅', 'ok');
 }
 function empModal(id) {
   const e = id ? DB.employees.find(x => x.id === id) : null;
