@@ -1,4 +1,4 @@
-const CACHE = 'rawatb-v4';
+const CACHE = 'rawatb-v5';
 const CORE = ['./manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
