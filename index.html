@@ -212,9 +212,10 @@ async function cloudStart(pw) {
     } catch (e) {
       if (e.code === 'auth/user-not-found') await auth.createUserWithEmailAndPassword(CLOUD_EMAIL, pw);
       else if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
-        CLOUD.err = 'pass'; CLOUD.started = false; cloudStatusUI();
-        askCloudPass(pw);
-        return;
+        let created = false;
+        try { await auth.createUserWithEmailAndPassword(CLOUD_EMAIL, pw); created = true; }
+        catch (e2) { if (e2.code !== 'auth/email-already-in-use') throw e2; }
+        if (!created) { CLOUD.err = 'pass'; CLOUD.started = false; cloudStatusUI(); askCloudPass(pw); return; }
       }
       else throw e;
     }
