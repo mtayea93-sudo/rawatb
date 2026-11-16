@@ -91,7 +91,9 @@ tfoot td{font-weight:800;border-top:2px solid var(--stroke);border-bottom:none;c
 .chip{display:inline-block;background:var(--acc-soft);color:var(--acc);border-radius:20px;padding:2px 10px;font-size:.72rem;font-weight:800}
 .chip.red{background:rgba(255,93,115,.12);color:var(--red)}
 .chip.green{background:rgba(47,208,140,.12);color:var(--green)}
-#sig{position:fixed;left:12px;bottom:8px;font-size:.68rem;color:var(--muted);opacity:.75;z-index:5;pointer-events:none}
+#sig{position:fixed;left:12px;bottom:8px;font-size:.68rem;color:var(--muted);opacity:.75;z-index:5;pointer-events:none;display:flex;flex-direction:column;gap:2px;line-height:1.5}
+#sig a{pointer-events:auto;color:var(--muted);text-decoration:none}
+#sig a:hover{color:var(--acc)}
 #modal-back{position:fixed;inset:0;background:rgba(4,8,16,.72);backdrop-filter:blur(4px);z-index:50;display:none;align-items:center;justify-content:center;padding:16px}
 #modal-back.open{display:flex}
 #modal{background:var(--card);border:1px solid var(--stroke);border-radius:18px;max-width:480px;width:100%;max-height:88dvh;overflow-y:auto;padding:18px}
@@ -145,7 +147,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--stroke);border-bottom:none;c
   </div>
 </div>
 
-<div id="sig"></div>
+<div id="sig"><span id="sig-text"></span><a href="https://rawatb.mtayea.com" target="_blank" rel="noopener">🌐 rawatb.mtayea.com</a></div>
 <div id="modal-back" onclick="if(event.target===this)closeModal()"><div id="modal"></div></div>
 <div id="toast"></div>
 
@@ -360,7 +362,7 @@ function applyTheme() {
   document.title = s.appName;
   $('#appname').textContent = s.appName;
   $('#logo').src = s.logo || 'icons/icon-192.png';
-  $('#sig').textContent = s.sig || '';
+  $('#sig-text').textContent = s.sig || '';
 }
 
 /* ===================== التنقل ===================== */
@@ -439,7 +441,7 @@ function vEmps() {
     </div>
     ${DB.employees.length ? DB.employees.map(e => `
       <div class="emp-row">
-        <div class="av">${esc(e.name.trim()[0] || '؟')}</div>
+        ${e.photo ? `<div class="av" style="padding:0;overflow:hidden"><img src="${e.photo}" alt="" style="width:100%;height:100%;object-fit:cover"></div>` : `<div class="av">${esc(e.name.trim()[0] || '؟')}</div>`}
         <div class="info"><b>${esc(e.name)}</b>
           <span>الراتب: ${fmt(e.salary)} ج.م${e.phone ? ' · 📱 ' + esc(e.phone) : ''}${e.qr ? ' · 📷 له QR تحويل' : ''}${e.active === false ? ' · متوقف' : ''}</span></div>
         <div class="rowbtns">
@@ -457,6 +459,15 @@ function empModal(id) {
     <div class="grid2">
       <div class="field"><label>الراتب الأساسي (ج.م)</label><input class="inp" id="em-salary" inputmode="decimal" value="${e ? e.salary : ''}"></div>
       <div class="field"><label>رقم الواتساب (اختياري)</label><input class="inp" id="em-phone" inputmode="numeric" maxlength="15" placeholder="2010xxxxxxxx" value="${e ? esc(e.phone || '') : ''}"></div>
+    </div>
+    <div class="field"><label>صورة الموظف (اختياري)</label>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="qrprev photoprev" style="border-radius:50%;flex:0 0 84px;width:84px;height:84px" onclick="$('#em-photo-file').click()">${e && e.photo ? `<img src="${e.photo}" alt="">` : '<span style="font-size:1.4rem">📷</span>'}</div>
+        <div style="flex:1">
+          <input type="file" id="em-photo-file" accept="image/*" class="hidden" onchange="photoChosen(this)">
+          ${e && e.photo ? '<button class="btn btn-danger btn-sm" onclick="delEmpPhoto()">🗑️ مسح الصورة</button>' : '<span class="muted" style="font-size:.75rem">اضغط الدائرة عشان ترفع صورة — بتتصغر تلقائي عشان السحابة</span>'}
+        </div>
+      </div>
     </div>
     <div class="field"><label>QR التحويل (إنستا باي / فودافون كاش)</label>
       <div style="display:flex;gap:12px;align-items:center">
@@ -481,6 +492,25 @@ function qrChosen(inp) {
   r.readAsDataURL(f);
 }
 function delEmpQr() { tmpQr = ''; $('.qrprev').innerHTML = '<span>اضغط لرفع صورة QR</span>'; }
+let tmpPhoto = null;
+function photoChosen(inp) {
+  const f = inp.files && inp.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      const sc = Math.min(1, 200 / Math.max(img.width, img.height));
+      c.width = Math.max(1, Math.round(img.width * sc)); c.height = Math.max(1, Math.round(img.height * sc));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      tmpPhoto = c.toDataURL('image/jpeg', 0.82);
+      const pv = $('.photoprev'); if (pv) pv.innerHTML = `<img src="${tmpPhoto}" alt="">`;
+    };
+    img.src = r.result;
+  };
+  r.readAsDataURL(f);
+}
+function delEmpPhoto() { tmpPhoto = ''; const pv = $('.photoprev'); if (pv) pv.innerHTML = '<span style="font-size:1.4rem">📷</span>'; }
 function saveEmp(id) {
   const name = $('#em-name').value.trim();
   const salary = num($('#em-salary').value);
@@ -492,10 +522,11 @@ function saveEmp(id) {
     const e = DB.employees.find(x => x.id === id);
     Object.assign(e, { name, salary, phone, qrLabel });
     if (tmpQr !== null) e.qr = tmpQr || '';
+    if (tmpPhoto !== null) e.photo = tmpPhoto || '';
   } else {
-    DB.employees.push({ id: uid(), name, salary, phone, qrLabel, qr: tmpQr || '', active: true, createdAt: Date.now() });
+    DB.employees.push({ id: uid(), name, salary, phone, qrLabel, qr: tmpQr || '', photo: tmpPhoto || '', active: true, createdAt: Date.now() });
   }
-  save(); tmpQr = null; closeModal(); render();
+  save(); tmpQr = null; tmpPhoto = null; closeModal(); render();
   toast('تم الحفظ ✅', 'ok');
 }
 function delEmp(id) {
@@ -546,7 +577,7 @@ function payCard(e) {
   return `
   <div class="paycard" id="pc-${e.id}">
     <div class="ph">
-      <b>👤 ${esc(e.name)} ${p ? '<span class="chip green">تم القبض ✓</span>' : ''}</b>
+      <b>${e.photo ? `<img src="${e.photo}" alt="" style="width:30px;height:30px;border-radius:50%;object-fit:cover;vertical-align:-8px;margin-left:6px">` : '👤'} ${esc(e.name)} ${p ? '<span class="chip green">تم القبض ✓</span>' : ''}</b>
       <div class="rowbtns">
         ${e.qr ? `<button class="btn btn-o btn-sm" onclick="showQr('${e.id}')">📷 QR</button>` : ''}
         ${p ? `<button class="btn btn-o btn-sm" onclick="waSend('${p.id}')">🟢 واتساب</button>` : ''}
@@ -621,10 +652,21 @@ function savePay(empId) {
 }
 function showQr(empId) {
   const e = DB.employees.find(x => x.id === empId);
+  let amount = null;
+  const pc = $('#pc-' + empId);
+  if (pc) amount = num($('#s-' + empId).value) - num($('#d-' + empId).value) + num($('#b-' + empId).value);
+  else { const p = payOf(empId, CUR.payMonth); if (p) amount = p.net; }
   openModal(`<h3>📷 تحويل مرتب — ${esc(e.name)}</h3>
     <p class="muted">${esc(e.qrLabel || 'محفظة إلكترونية')}</p>
     <div style="background:#fff;border-radius:16px;padding:14px;text-align:center"><img src="${e.qr}" style="width:100%;max-width:280px;border-radius:8px" alt="QR"></div>
+    ${amount !== null ? `<div class="netpill" style="margin-top:12px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap"><span>المبلغ: <b style="font-size:1.15rem">${fmt(amount)} ج.م</b></span><button class="btn btn-o btn-sm" onclick="copyAmt('${amount}')">📋 نسخ المبلغ</button></div>
+    <p class="muted" style="font-size:.72rem;margin-top:8px">امسح الـ QR بالكاميرا، وبعدين الصق المبلغ في خانة المبلغ 👆</p>` : '<p class="muted" style="margin-top:10px;font-size:.78rem">💡 احفظ القبض الأول عشان المبلغ يظهر هنا تلقائي</p>'}
     <button class="btn btn-o btn-block" style="margin-top:12px" onclick="closeModal()">قفل</button>`);
+}
+function copyAmt(t) {
+  const done = () => toast('تم نسخ المبلغ ✅', 'ok');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done).catch(() => toast('اكتب المبلغ يدوي', 'err'));
+  else toast('اكتب المبلغ يدوي', 'err');
 }
 
 /* ===================== واتساب ===================== */
