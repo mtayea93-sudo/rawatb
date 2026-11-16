@@ -211,7 +211,11 @@ async function cloudStart(pw) {
       await auth.signInWithEmailAndPassword(CLOUD_EMAIL, pw);
     } catch (e) {
       if (e.code === 'auth/user-not-found') await auth.createUserWithEmailAndPassword(CLOUD_EMAIL, pw);
-      else if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') { CLOUD.err = 'pass'; CLOUD.started = false; cloudStatusUI(); toast('كلمة مرور السحابة مختلفة — غيّر كلمة المرور وادخل تاني', 'err'); return; }
+      else if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+        CLOUD.err = 'pass'; CLOUD.started = false; cloudStatusUI();
+        askCloudPass(pw);
+        return;
+      }
       else throw e;
     }
     CLOUD.uid = auth.currentUser.uid;
@@ -240,6 +244,32 @@ async function cloudStart(pw) {
     cloudStatusUI();
   } catch (e) {
     CLOUD.ready = false; CLOUD.started = false; cloudStatusUI();
+  }
+}
+/* كلمة مرور السحابة قديمة — نسأل عن القديمة مرة واحدة ونظبطها على الجديدة */
+function askCloudPass(newPw) {
+  window._cloudNewPw = newPw;
+  openModal(`<h3>☁️ مزامنة كلمة المرور</h3>
+    <p class="muted">حساب السحابة اتعمل بكلمة مرور قديمة. اكتبها هنا <b>مرة واحدة بس</b> وهنظبطها على الجديدة تلقائيًا:</p>
+    <div class="field"><label>كلمة المرور القديمة (قبل التغيير)</label><input class="inp" type="password" id="cp-old" autocomplete="off"></div>
+    <div class="rowbtns">
+      <button class="btn btn-p" style="flex:1" onclick="fixCloudPass()">☁️ ظبط المزامنة</button>
+      <button class="btn btn-o" onclick="closeModal()">بعدين</button>
+    </div>`);
+}
+async function fixCloudPass() {
+  const oldPw = $('#cp-old').value;
+  if (!oldPw) return toast('اكتب كلمة المرور القديمة', 'err');
+  try {
+    const auth = firebase.auth();
+    await auth.signInWithEmailAndPassword(CLOUD_EMAIL, oldPw);
+    await auth.currentUser.updatePassword(window._cloudNewPw);
+    CLOUD.started = false; CLOUD.err = '';
+    closeModal();
+    toast('☁️ اتظبطت — جاري الربط بالسحابة...', 'ok');
+    await cloudStart(window._cloudNewPw);
+  } catch (e) {
+    toast('القديمة دي غلط — جرّب تاني', 'err');
   }
 }
 function cloudPushNow() {
