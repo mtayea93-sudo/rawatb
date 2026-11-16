@@ -204,6 +204,38 @@ function cloudStatusUI() {
   else if (CLOUD.err === 'pass') { el.textContent = '🔴 محلي'; el.title = 'كلمة مرور السحابة مختلفة — غيّر كلمة المرور وادخل تاني'; }
   else { el.textContent = '⚪ محلي'; el.title = 'بدون سحابة — البيانات على الجهاز ده بس'; }
 }
+/* دمج بيانات السحابة مع المحلي: الموظفون والقبض بالـ id — الأحدث updatedAt يكسب، والمسحوح مترجعش */
+function cloudMerge(remote) {
+  let n = 0;
+  if (!remote) return n;
+  DB.tomb = DB.tomb || {};
+  Object.keys(remote.tomb || {}).forEach(id => {
+    if (!DB.tomb[id] || remote.tomb[id] > DB.tomb[id]) {
+      DB.tomb[id] = remote.tomb[id];
+      const i = DB.employees.findIndex(e => e.id === id);
+      if (i > -1) { DB.employees.splice(i, 1); n++; }
+    }
+  });
+  const empMap = {}; DB.employees.forEach(e => empMap[e.id] = e);
+  (remote.employees || []).forEach(re => {
+    if (DB.tomb[re.id]) return;
+    const le = empMap[re.id];
+    if (!le) { DB.employees.push(re); n++; }
+    else if ((re.updatedAt || 0) > (le.updatedAt || 0)) { Object.assign(le, re); n++; }
+  });
+  const payMap = {}; DB.pays.forEach(p => payMap[p.id] = p);
+  (remote.pays || []).forEach(rp => {
+    const lp = payMap[rp.id];
+    if (!lp) { DB.pays.push(rp); n++; }
+    else if ((rp.updatedAt || 0) > (lp.updatedAt || 0)) { Object.assign(lp, rp); n++; }
+  });
+  if (remote.settings && (remote.settings.updatedAt || 0) > (DB.settings.updatedAt || 0)) {
+    const keepHash = DB.settings.passHash;
+    DB.settings = Object.assign({}, DB.settings, remote.settings);
+    DB.settings.passHash = keepHash;
+  }
+  return n;
+}
 async function cloudStart(pw) {
   if (CLOUD.started) return; CLOUD.started = true;
   try {
@@ -227,23 +259,22 @@ async function cloudStart(pw) {
       const v = s.val(); if (!v || _pulling) return;
       if (v.at <= (DB.settings.updatedAt || 0)) return;
       _pulling = true;
-      DB = v.data; DB.settings.updatedAt = v.at;
+      const n = cloudMerge(v.data);
       localStorage.setItem(LS_KEY, JSON.stringify(DB));
       _pulling = false;
       applyTheme(); if (ME_IN) render(); cloudStatusUI();
-      toast('☁️ اتزامنت بيانات من جهاز تاني', 'ok');
+      if (n) toast('☁️ اتزامنت بيانات من جهاز تاني', 'ok');
     });
     const snap = await cloudDb().get();
     const v = snap.val();
-    if (v && v.at > (DB.settings.updatedAt || 0)) {
+    if (v && v.data) {
       _pulling = true;
-      DB = v.data; DB.settings.updatedAt = v.at;
+      cloudMerge(v.data);
       localStorage.setItem(LS_KEY, JSON.stringify(DB));
       _pulling = false;
       applyTheme(); if (ME_IN) render();
-    } else {
-      cloudPushNow();
     }
+    cloudPushNow();
     cloudStatusUI();
   } catch (e) {
     CLOUD.ready = false; CLOUD.started = false; cloudStatusUI();
@@ -507,6 +538,7 @@ function saveEmpProfile(id) {
   e.raiseRate = num($('#pf-raise').value);
   e.raiseType = $('#pf-raisetype').value;
   e.hireDate = $('#pf-hire').value;
+  e.updatedAt = Date.now();
   save(); render();
   toast('تم حفظ ملف الموظف ✅', 'ok');
 }
@@ -582,8 +614,9 @@ function saveEmp(id) {
     Object.assign(e, { name, salary, phone, qrLabel });
     if (tmpQr !== null) e.qr = tmpQr || '';
     if (tmpPhoto !== null) e.photo = tmpPhoto || '';
+    e.updatedAt = Date.now();
   } else {
-    DB.employees.push({ id: uid(), name, salary, phone, qrLabel, qr: tmpQr || '', photo: tmpPhoto || '', active: true, createdAt: Date.now() });
+    DB.employees.push({ id: uid(), name, salary, phone, qrLabel, qr: tmpQr || '', photo: tmpPhoto || '', active: true, createdAt: Date.now(), updatedAt: Date.now() });
   }
   save(); tmpQr = null; tmpPhoto = null; closeModal(); render();
   toast('تم الحفظ ✅', 'ok');
@@ -597,6 +630,7 @@ function delEmp(id) {
 function delEmpYes(id) {
   DB.employees = DB.employees.filter(x => x.id !== id);
   DB.pays = DB.pays.filter(p => p.empId !== id);
+  DB.tomb = DB.tomb || {}; DB.tomb[id] = Date.now();
   save(); closeModal(); render(); toast('اتحذف ✅', 'ok');
 }
 
