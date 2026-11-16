@@ -406,6 +406,18 @@ function vPay() {
   </div>
   ${emps.length ? emps.map(e => payCard(e)).join('') : '<div class="empty">مفيش موظفين — ضيف موظفين الأول من تبويب «الموظفون»</div>'}`;
 }
+/* أيام عمل الشهر = أيام الشهر ناقص الجُمُع (الجُمُع إجازة مش محسوبة في المرتب) */
+function monthDays(m) { const [y, mm] = m.split('-').map(Number); return new Date(y, mm, 0).getDate(); }
+function fridaysIn(m) {
+  const [y, mm] = m.split('-').map(Number);
+  const n = new Date(y, mm, 0).getDate();
+  let c = 0;
+  for (let d = 1; d <= n; d++) if (new Date(y, mm - 1, d).getDay() === 5) c++;
+  return c;
+}
+function workDays(m) { return monthDays(m) - fridaysIn(m); }
+function dayWage(salary, m) { return Math.round((num(salary) / workDays(m)) * 100) / 100; }
+function wageHint(salary) { return workDays(CUR.payMonth) + ' يوم عمل في ' + monthLabel(CUR.payMonth) + ' — قيمة اليوم: ' + fmt(dayWage(salary, CUR.payMonth)) + ' ج.م'; }
 function payCard(e) {
   const p = payOf(e.id, CUR.payMonth);
   const salary = p ? p.salary : e.salary;
@@ -424,9 +436,11 @@ function payCard(e) {
       </div>
     </div>
     <div class="grid2">
-      <div class="field"><label>الراتب (ج.م)</label><input class="inp pc-inp" inputmode="decimal" id="s-${e.id}" value="${salary}" oninput="calcNet('${e.id}')"></div>
-      <div class="field"><label>الخصم (ج.م)</label><input class="inp pc-inp" inputmode="decimal" id="d-${e.id}" value="${deduction || ''}" placeholder="0" oninput="dedToggled('${e.id}');calcNet('${e.id}')"></div>
-      <div class="field" id="fr-${e.id}"><label>سبب الخصم ${num(deduction) ? '' : '🔒 (اتفتح لما تكتب خصم)'}</label><input class="inp" id="r-${e.id}" value="${esc(reason)}" placeholder="مثال: غيام يومين" ${num(deduction) ? '' : 'disabled'}></div>
+      <div class="field"><label>الراتب (ج.م)</label><input class="inp pc-inp" inputmode="decimal" id="s-${e.id}" value="${salary}" oninput="salChanged('${e.id}')"></div>
+      <div class="field"><label>أيام الغياب — الجُمُع مش محسوبة ✅</label><input class="inp" inputmode="numeric" id="a-${e.id}" value="${p && p.absDays ? p.absDays : ''}" placeholder="0" oninput="absChanged('${e.id}')">
+        <div style="font-size:.72rem;color:var(--muted);margin-top:5px;line-height:1.7" id="aw-${e.id}">${wageHint(salary)}</div></div>
+      <div class="field"><label>الخصم (ج.م) — بيتحسب تلقائي من الأيام</label><input class="inp pc-inp" inputmode="decimal" id="d-${e.id}" value="${deduction || ''}" placeholder="0" oninput="dedToggled('${e.id}');calcNet('${e.id}')"></div>
+      <div class="field" id="fr-${e.id}"><label>سبب الخصم ${num(deduction) ? '' : '🔒 (اتفتح لما تكتب خصم)'}</label><input class="inp" id="r-${e.id}" value="${esc(reason)}" placeholder="مثال: غياب يومين" ${num(deduction) ? '' : 'disabled'}></div>
       <div class="field"><label>مكافأة (ج.م)</label><input class="inp pc-inp" inputmode="decimal" id="b-${e.id}" value="${bonus || ''}" placeholder="0" oninput="calcNet('${e.id}')"></div>
       <div class="field"><label>تاريخ القبض</label><input type="date" class="inp" id="dt-${e.id}" value="${payDate}"></div>
     </div>
@@ -447,6 +461,33 @@ function calcNet(empId) {
   const s = num($('#s-' + empId).value), d = num($('#d-' + empId).value), b = num($('#b-' + empId).value);
   $('#np-' + empId).innerHTML = fmt(s - d + b) + ' ج.م<small>الصافي (يتحسب تلقائي)</small>';
 }
+/* لما تكتب أيام الغياب: الخصم بيتحسب لوحده = عدد الأيام × قيمة اليوم */
+function absChanged(empId) {
+  let a = Math.floor(num($('#a-' + empId).value));
+  const wd = workDays(CUR.payMonth);
+  if (a < 0) a = 0;
+  if (a > wd) { a = wd; $('#a-' + empId).value = a; toast('أقصى عدد أيام عمل في الشهر ده ' + wd + ' يوم', 'err'); }
+  const dEl = $('#d-' + empId);
+  if (a > 0) {
+    dEl.value = Math.round(a * dayWage($('#s-' + empId).value, CUR.payMonth) * 100) / 100;
+    const rEl = $('#r-' + empId);
+    if (!rEl.value.trim()) rEl.value = 'غياب ' + a + ' أيام';
+  } else {
+    $('#a-' + empId).value = '';
+    dEl.value = '';
+  }
+  dedToggled(empId); calcNet(empId);
+}
+/* لو الراتب اتغير والأيام مكتوبة: يعيد حساب الخصم بقيمة اليوم الجديدة */
+function salChanged(empId) {
+  const aEl = $('#a-' + empId);
+  if (aEl && num(aEl.value) > 0) {
+    $('#d-' + empId).value = Math.round(num(aEl.value) * dayWage($('#s-' + empId).value, CUR.payMonth) * 100) / 100;
+    dedToggled(empId);
+  }
+  $('#aw-' + empId).textContent = wageHint($('#s-' + empId).value);
+  calcNet(empId);
+}
 function bindPayCalc() {}
 function savePay(empId) {
   const s = num($('#s-' + empId).value), d = num($('#d-' + empId).value), b = num($('#b-' + empId).value);
@@ -457,7 +498,7 @@ function savePay(empId) {
   if (d > 0 && !reason) return toast('اكتب سبب الخصم', 'err');
   if (d > s) return toast('الخصم أكبر من الراتب!', 'err');
   const ex = payOf(empId, CUR.payMonth);
-  const rec = { id: ex ? ex.id : uid(), empId, month: CUR.payMonth, salary: s, deduction: d, deductReason: d ? reason : '', bonus: b, net: s - d + b, payDate: dt, updatedAt: Date.now() };
+  const rec = { id: ex ? ex.id : uid(), empId, month: CUR.payMonth, salary: s, deduction: d, deductReason: d ? reason : '', bonus: b, net: s - d + b, payDate: dt, absDays: num($('#a-' + empId).value), updatedAt: Date.now() };
   if (ex) Object.assign(ex, rec); else DB.pays.push(rec);
   save(); render(); toast('تم حفظ القبض ✅', 'ok');
 }
@@ -476,6 +517,7 @@ function buildWaMsg(p) {
   L.push('مرحبًا ' + (e ? e.name : '') + ' 👋');
   L.push('تفاصيل مرتبك عن ' + monthLabel(p.month) + ':');
   L.push('الراتب: ' + fmt(p.salary) + ' ج.م');
+  if (num(p.absDays)) L.push('غياب: ' + p.absDays + ' أيام');
   if (num(p.deduction)) L.push('الخصم: ' + fmt(p.deduction) + ' ج.م');
   if (num(p.deduction) && p.deductReason) L.push('سبب الخصم: ' + p.deductReason);
   if (num(p.bonus)) L.push('مكافأة: ' + fmt(p.bonus) + ' ج.م');
