@@ -14,6 +14,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
 :root{
   --acc:#14c8b2;
@@ -134,6 +137,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--stroke);border-bottom:none;c
     <div class="topbar">
       <img id="logo" src="icons/icon-192.png" alt="">
       <div class="tt"><b id="appname">رواتب</b><span id="appsub">إدارة رواتب الفريق</span></div>
+      <span id="cloudst" style="font-size:.68rem;color:var(--muted);white-space:nowrap" title="">⚪ محلي</span>
       <button class="btn btn-ghost btn-sm" onclick="lock()">🔒 خروج</button>
     </div>
     <nav class="tabs" id="tabs"></nav>
@@ -177,7 +181,87 @@ function load() {
   DB.employees = DB.employees || [];
   DB.pays = DB.pays || [];
 }
-function save() { localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
+function save() { localStorage.setItem(LS_KEY, JSON.stringify(DB)); cloudPush(); }
+
+/* ===================== السحابة (Firebase RTDB) ===================== */
+const FB_CONFIG = {
+  apiKey: "AIzaSyAPawpCwihRHOaPjMzhhcsSDa9WAy0Qx-Q",
+  authDomain: "sakrlab2026.firebaseapp.com",
+  databaseURL: "https://sakrlab2026-default-rtdb.firebaseio.com",
+  projectId: "sakrlab2026"
+};
+const CLOUD_EMAIL = 'payroll@rawatb.app';
+let CLOUD = { ready: false, uid: null, started: false, err: '' };
+let _pushT = null, _pulling = false;
+
+function cloudDb() { return firebase.database().ref('rawatb/' + CLOUD.uid); }
+function cloudStatusUI() {
+  const el = document.querySelector('#cloudst'); if (!el) return;
+  if (CLOUD.ready) { el.textContent = '🟢 سحابة'; el.title = 'متصل بالسحابة — بياناتك متزامنة على كل الأجهزة'; }
+  else if (CLOUD.err === 'weak') { el.textContent = '🟠 محلي'; el.title = 'كلمة المرور أقل من 6 حروف — السحابة محتاجة 6 على الأقل، غيّرها من الإعدادات'; }
+  else if (CLOUD.err === 'pass') { el.textContent = '🔴 محلي'; el.title = 'كلمة مرور السحابة مختلفة — غيّر كلمة المرور وادخل تاني'; }
+  else { el.textContent = '⚪ محلي'; el.title = 'بدون سحابة — البيانات على الجهاز ده بس'; }
+}
+async function cloudStart(pw) {
+  if (CLOUD.started) return; CLOUD.started = true;
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    const auth = firebase.auth();
+    try {
+      await auth.signInWithEmailAndPassword(CLOUD_EMAIL, pw);
+    } catch (e) {
+      if (e.code === 'auth/user-not-found') await auth.createUserWithEmailAndPassword(CLOUD_EMAIL, pw);
+      else if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') { CLOUD.err = 'pass'; CLOUD.started = false; cloudStatusUI(); toast('كلمة مرور السحابة مختلفة — غيّر كلمة المرور وادخل تاني', 'err'); return; }
+      else throw e;
+    }
+    CLOUD.uid = auth.currentUser.uid;
+    CLOUD.ready = true; CLOUD.err = '';
+    cloudDb().on('value', s => {
+      const v = s.val(); if (!v || _pulling) return;
+      if (v.at <= (DB.settings.updatedAt || 0)) return;
+      _pulling = true;
+      DB = v.data; DB.settings.updatedAt = v.at;
+      localStorage.setItem(LS_KEY, JSON.stringify(DB));
+      _pulling = false;
+      applyTheme(); if (ME_IN) render(); cloudStatusUI();
+      toast('☁️ اتزامنت بيانات من جهاز تاني', 'ok');
+    });
+    const snap = await cloudDb().get();
+    const v = snap.val();
+    if (v && v.at > (DB.settings.updatedAt || 0)) {
+      _pulling = true;
+      DB = v.data; DB.settings.updatedAt = v.at;
+      localStorage.setItem(LS_KEY, JSON.stringify(DB));
+      _pulling = false;
+      applyTheme(); if (ME_IN) render();
+    } else {
+      cloudPushNow();
+    }
+    cloudStatusUI();
+  } catch (e) {
+    CLOUD.ready = false; CLOUD.started = false; cloudStatusUI();
+  }
+}
+function cloudPushNow() {
+  if (!CLOUD.ready || _pulling) return;
+  DB.settings.updatedAt = Date.now();
+  localStorage.setItem(LS_KEY, JSON.stringify(DB));
+  cloudDb().set({ data: DB, at: DB.settings.updatedAt }).catch(() => {});
+}
+function cloudPush() {
+  if (!CLOUD.ready) return;
+  clearTimeout(_pushT); _pushT = setTimeout(cloudPushNow, 700);
+}
+async function cloudPassChange(oldPw, newPw) {
+  if (!CLOUD.ready) return true;
+  try {
+    const auth = firebase.auth();
+    const cred = firebase.auth.EmailAuthProvider.credential(CLOUD_EMAIL, oldPw);
+    await auth.currentUser.reauthenticateWithCredential(cred);
+    await auth.currentUser.updatePassword(newPw);
+    return true;
+  } catch (e) { return false; }
+}
 
 async function hash(t) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('rawatb::' + t));
@@ -212,6 +296,8 @@ async function doLogin() {
     return toast('كلمة المرور غلط ❌', 'err');
   }
   ME_IN = true; $('#pw').value = ''; boot();
+  if (p.length >= 6) cloudStart(p);
+  else { CLOUD.err = 'weak'; cloudStatusUI(); }
 }
 function lock() { ME_IN = false; showAuth(); }
 function showAuth() {
@@ -612,9 +698,16 @@ function vSet() {
     <div class="field"><label>سطر إضافي يتحط آخر الرسالة (اختياري)</label><input class="inp" id="st-wanote" value="${esc(s.waNote)}" placeholder="مثال: للاستفسار تواصل معانا على 010..."></div>
   </div>
   <div class="card">
+    <h3>☁️ السحابة</h3>
+    <p class="muted" id="cloud-info">${CLOUD.ready ? '🟢 متصل — بياناتك متزامنة على كل الأجهزة' : (DB.settings && CLOUD.err === 'weak' ? '🟠 كلمة المرور أقل من 6 حروف — غيّرها تحت عشان تفعل السحابة' : '⚪ السحابة مش متصلة — البيانات على الجهاز ده بس')}</p>
+    ${CLOUD.ready ? `<p class="muted">آخر مزامنة: ${DB.settings.updatedAt ? new Date(DB.settings.updatedAt).toLocaleString('ar-EG') : '—'}</p>
+    <button class="btn btn-o btn-sm" onclick="cloudPushNow();toast('☁️ تمت المزامنة','ok')">🔄 مزامنة دلوقتي</button>` : ''}
+  </div>
+  <div class="card">
     <h3>🔑 كلمة المرور</h3>
+    <div class="field"><label>الحالية (ضروري عشان تغيّر)</label><input class="inp" type="password" id="st-pw0"></div>
     <div class="grid2">
-      <div class="field"><label>الجديدة</label><input class="inp" type="password" id="st-pw1"></div>
+      <div class="field"><label>الجديدة (6 حروف على الأقل للسحابة)</label><input class="inp" type="password" id="st-pw1"></div>
       <div class="field"><label>تأكيدها</label><input class="inp" type="password" id="st-pw2"></div>
     </div>
   </div>
@@ -646,11 +739,15 @@ async function saveSet() {
   s.whatsapp = $('#st-wa').value.replace(/[^\d]/g, '');
   s.waNote = $('#st-wanote').value.trim();
   if (stTmpLogo !== undefined) s.logo = stTmpLogo;
-  const p1 = $('#st-pw1').value, p2 = $('#st-pw2').value;
-  if (p1 || p2) {
-    if (p1.length < 4) return toast('كلمة المرور 4 حروف على الأقل', 'err');
+  const p0 = $('#st-pw0').value, p1 = $('#st-pw1').value, p2 = $('#st-pw2').value;
+  if (p1 || p2 || p0) {
+    if (!p0) return toast('اكتب كلمة المرور الحالية عشان تغيّرها', 'err');
+    if (await hash(p0) !== s.passHash) return toast('كلمة المرور الحالية غلط ❌', 'err');
+    if (p1.length < 6) return toast('السحابة محتاجة 6 حروف على الأقل', 'err');
     if (p1 !== p2) return toast('كلمتا المرور مش متطابقتين', 'err');
+    const ok = await cloudPassChange(p0, p1);
     s.passHash = await hash(p1);
+    if (!ok) toast('اتغيّرت محليًا بس — مزامنة السحابة هتتظبط مع أول دخولة', 'err');
   }
   save(); stTmpLogo = undefined; applyTheme(); render();
   toast('تم حفظ الإعدادات ✅', 'ok');
