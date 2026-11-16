@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>رواتب</title>
+<meta name="theme-color" content="#0b1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --acc:#14c8b2;
+  --acc-soft:rgba(20,200,178,.14);
+  --bg:#0b1220; --bg2:#0e1626; --card:#131e33; --card2:#182540;
+  --stroke:rgba(255,255,255,.08);
+  --txt:#eef4ff; --muted:#93a1bb;
+  --red:#ff5d73; --green:#2fd08c; --amber:#ffb347;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:'Cairo',system-ui,'Segoe UI',Tahoma,sans-serif;
+  background:
+    radial-gradient(900px 500px at 85% -10%, rgba(20,200,178,.14), transparent 60%),
+    radial-gradient(700px 500px at -10% 30%, rgba(30,94,255,.12), transparent 60%),
+    var(--bg);
+  color:var(--txt); min-height:100dvh;
+}
+#view{max-width:860px;margin:0 auto;padding:16px 16px 90px}
+h1,h2,h3{margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--stroke);border-radius:16px;padding:16px;margin-bottom:14px}
+.muted{color:var(--muted);font-size:.85rem;line-height:1.9}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;cursor:pointer;
+  font-family:inherit;font-weight:700;font-size:.9rem;border-radius:12px;padding:11px 18px;transition:transform .15s ease,opacity .15s ease}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-p{background:var(--acc);color:#04211d}
+.btn-o{background:transparent;color:var(--txt);border:1.5px solid var(--stroke)}
+.btn-danger{background:rgba(255,93,115,.12);color:var(--red);border:1.5px solid rgba(255,93,115,.3)}
+.btn-sm{padding:7px 12px;font-size:.78rem;border-radius:10px}
+.btn-block{width:100%}
+.btn-ghost{background:transparent;color:var(--muted);padding:8px 10px}
+.inp,select.inp,textarea.inp{width:100%;background:var(--bg2);border:1.5px solid var(--stroke);color:var(--txt);
+  border-radius:12px;padding:11px 14px;font-family:inherit;font-size:.95rem;outline:none}
+.inp:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+.inp:disabled{opacity:.4}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:.8rem;font-weight:700;color:var(--muted);margin-bottom:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:560px){.grid2{grid-template-columns:1fr}}
+.topbar{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.topbar img{width:44px;height:44px;border-radius:12px;object-fit:cover;border:1px solid var(--stroke)}
+.topbar .tt{flex:1}
+.topbar .tt b{font-size:1.15rem;display:block}
+.topbar .tt span{font-size:.72rem;color:var(--muted)}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:1;white-space:nowrap;border:1.5px solid var(--stroke);background:var(--card);color:var(--muted);
+  border-radius:12px;padding:10px 8px;font-family:inherit;font-weight:700;font-size:.82rem;cursor:pointer}
+.tabs button.on{background:var(--acc);border-color:var(--acc);color:#04211d}
+.statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:640px){.statgrid{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--card);border:1px solid var(--stroke);border-radius:14px;padding:12px}
+.stat b{display:block;font-size:1.15rem;margin-top:2px}
+.stat span{font-size:.72rem;color:var(--muted);font-weight:700}
+.emp-row{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--stroke);border-radius:12px;margin-bottom:8px;background:var(--bg2)}
+.emp-row .av{width:42px;height:42px;border-radius:12px;background:var(--acc-soft);color:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.05rem;flex-shrink:0}
+.emp-row .info{flex:1;min-width:0}
+.emp-row .info b{display:block;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.emp-row .info span{font-size:.74rem;color:var(--muted)}
+.paycard{background:var(--card);border:1px solid var(--stroke);border-radius:16px;padding:14px;margin-bottom:14px}
+.paycard .ph{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.paycard .ph b{font-size:1rem}
+.netpill{background:var(--acc-soft);color:var(--acc);border-radius:12px;padding:8px 14px;font-weight:800;font-size:1rem;text-align:center}
+.netpill small{display:block;font-size:.66rem;font-weight:700;opacity:.8}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{color:var(--muted);font-size:.72rem;text-align:right;padding:8px 6px;border-bottom:1px solid var(--stroke);white-space:nowrap}
+td{padding:9px 6px;border-bottom:1px solid var(--stroke);text-align:right;white-space:nowrap}
+tfoot td{font-weight:800;border-top:2px solid var(--stroke);border-bottom:none;color:var(--acc)}
+.tblwrap{overflow-x:auto}
+.chip{display:inline-block;background:var(--acc-soft);color:var(--acc);border-radius:20px;padding:2px 10px;font-size:.72rem;font-weight:800}
+.chip.red{background:rgba(255,93,115,.12);color:var(--red)}
+.chip.green{background:rgba(47,208,140,.12);color:var(--green)}
+#sig{position:fixed;left:12px;bottom:8px;font-size:.68rem;color:var(--muted);opacity:.75;z-index:5;pointer-events:none}
+#modal-back{position:fixed;inset:0;background:rgba(4,8,16,.72);backdrop-filter:blur(4px);z-index:50;display:none;align-items:center;justify-content:center;padding:16px}
+#modal-back.open{display:flex}
+#modal{background:var(--card);border:1px solid var(--stroke);border-radius:18px;max-width:480px;width:100%;max-height:88dvh;overflow-y:auto;padding:18px}
+#toast{position:fixed;bottom:64px;left:50%;transform:translateX(-50%) translateY(20px);background:#1d2a44;border:1px solid var(--stroke);
+  color:var(--txt);padding:11px 20px;border-radius:14px;font-weight:700;font-size:.85rem;opacity:0;transition:all .25s ease;z-index:99;pointer-events:none;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:rgba(255,93,115,.5);color:#ffb3be}
+#toast.ok{border-color:rgba(47,208,140,.5)}
+.authwrap{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px}
+.authbox{background:var(--card);border:1px solid var(--stroke);border-radius:20px;padding:26px;width:100%;max-width:380px;text-align:center}
+.authbox img{width:84px;height:84px;border-radius:22px;margin-bottom:12px}
+.authbox h1{font-size:1.35rem;margin-bottom:4px}
+.seg{display:flex;gap:6px;background:var(--bg2);border-radius:12px;padding:4px;margin-bottom:12px}
+.seg button{flex:1;border:none;background:transparent;color:var(--muted);font-family:inherit;font-weight:700;font-size:.8rem;padding:8px;border-radius:9px;cursor:pointer}
+.seg button.on{background:var(--acc);color:#04211d}
+.qrprev{width:130px;height:130px;border-radius:14px;border:1.5px dashed var(--stroke);display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--bg2);cursor:pointer}
+.qrprev img{width:100%;height:100%;object-fit:cover}
+.qrprev span{font-size:.72rem;color:var(--muted);text-align:center;padding:8px}
+.swatches{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.swatches button{width:38px;height:38px;border-radius:12px;border:2.5px solid transparent;cursor:pointer}
+.swatches button.on{border-color:#fff}
+.rowbtns{display:flex;gap:6px;flex-wrap:wrap}
+.empty{text-align:center;color:var(--muted);padding:26px 10px;font-size:.85rem}
+.hidden{display:none!important}
+:focus-visible{outline:2.5px solid var(--acc);outline-offset:2px;border-radius:8px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="auth" class="authwrap hidden">
+  <div class="authbox">
+    <img id="auth-logo" src="icons/icon-192.png" alt="">
+    <h1 id="auth-title">رواتب</h1>
+    <p class="muted" id="auth-sub">سجل دخولك للمتابعة</p>
+    <div class="field" style="text-align:right"><label>كلمة المرور</label><input class="inp" type="password" id="pw" autocomplete="current-password"></div>
+    <button class="btn btn-p btn-block" id="auth-btn" onclick="doLogin()">دخول</button>
+    <p class="muted" id="auth-hint" style="margin-top:12px"></p>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <div id="view">
+    <div class="topbar">
+      <img id="logo" src="icons/icon-192.png" alt="">
+      <div class="tt"><b id="appname">رواتب</b><span id="appsub">إدارة رواتب الفريق</span></div>
+      <button class="btn btn-ghost btn-sm" onclick="lock()">🔒 خروج</button>
+    </div>
+    <nav class="tabs" id="tabs"></nav>
+    <main id="main"></main>
+  </div>
+</div>
+
+<div id="sig"></div>
+<div id="modal-back" onclick="if(event.target===this)closeModal()"><div id="modal"></div></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ===================== البيانات ===================== */
+const LS_KEY = 'rawatb_db_v1';
+const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+let DB = null;
+let ME_IN = false;
+let CUR = { tab: 'home', payMonth: null, repMonth: null, repAll: false };
+
+function defDB() {
+  return {
+    v: 1,
+    settings: {
+      passHash: '',
+      appName: 'رواتب',
+      logo: '',
+      theme: '#14c8b2',
+      sig: 'إعداد: محمد طايع — MT Ayea',
+      whatsapp: '20106051837',
+      waNote: ''
+    },
+    employees: [],
+    pays: []
+  };
+}
+function load() {
+  try { DB = JSON.parse(localStorage.getItem(LS_KEY)) || defDB(); }
+  catch (e) { DB = defDB(); }
+  DB.settings = Object.assign(defDB().settings, DB.settings || {});
+  DB.employees = DB.employees || [];
+  DB.pays = DB.pays || [];
+}
+function save() { localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
+
+async function hash(t) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('rawatb::' + t));
+  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const $ = s => document.querySelector(s);
+const fmt = n => (Number(n) || 0).toLocaleString('en-US');
+const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function monthLabel(m) { if (!m) return '—'; const [y, mm] = m.split('-'); return MONTHS_AR[+mm - 1] + ' ' + y; }
+function curMonth() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+function toast(msg, type) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show ' + (type || '');
+  clearTimeout(t._t); t._t = setTimeout(() => t.className = '', 2600);
+}
+function openModal(html) { $('#modal').innerHTML = html; $('#modal-back').classList.add('open'); }
+function closeModal() { $('#modal-back').classList.remove('open'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+/* ===================== الجلسة ===================== */
+async function doLogin() {
+  const p = $('#pw').value;
+  if (!p) return toast('اكتب كلمة المرور', 'err');
+  if (!DB.settings.passHash) {
+    if (p.length < 4) return toast('كلمة المرور 4 حروف على الأقل', 'err');
+    DB.settings.passHash = await hash(p); save();
+    toast('تم إنشاء كلمة المرور ✅', 'ok');
+  } else if (await hash(p) !== DB.settings.passHash) {
+    return toast('كلمة المرور غلط ❌', 'err');
+  }
+  ME_IN = true; $('#pw').value = ''; boot();
+}
+function lock() { ME_IN = false; showAuth(); }
+function showAuth() {
+  $('#app').classList.add('hidden');
+  const a = $('#auth'); a.classList.remove('hidden');
+  const s = DB.settings;
+  $('#auth-logo').src = s.logo || 'icons/icon-192.png';
+  $('#auth-title').textContent = s.appName;
+  if (!s.passHash) {
+    $('#auth-sub').textContent = 'أول مرة هنا؟ عمل كلمة مرور خاصة بيك';
+    $('#auth-btn').textContent = 'إنشاء كلمة المرور';
+    $('#auth-hint').textContent = 'احفظها كويس — هي اللي بتحمي بيانات الرواتب';
+  } else {
+    $('#auth-sub').textContent = 'سجل دخولك للمتابعة';
+    $('#auth-btn').textContent = 'دخول';
+    $('#auth-hint').textContent = '';
+  }
+  setTimeout(() => $('#pw').focus(), 50);
+}
+
+/* ===================== الهوية والشكل ===================== */
+function applyTheme() {
+  const s = DB.settings;
+  document.documentElement.style.setProperty('--acc', s.theme || '#14c8b2');
+  const hex = s.theme || '#14c8b2';
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  document.documentElement.style.setProperty('--acc-soft', `rgba(${r},${g},${b},.14)`);
+  document.querySelector('meta[name=theme-color]').setAttribute('content', hex);
+  document.title = s.appName;
+  $('#appname').textContent = s.appName;
+  $('#logo').src = s.logo || 'icons/icon-192.png';
+  $('#sig').textContent = s.sig || '';
+}
+
+/* ===================== التنقل ===================== */
+const TABS = [
+  ['home', '🏠 الرئيسية'],
+  ['emps', '👥 الموظفون'],
+  ['pay', '💵 تسجيل القبض'],
+  ['report', '📊 التقرير'],
+  ['set', '⚙️ الإعدادات']
+];
+function boot() {
+  applyTheme();
+  $('#auth').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+  if (!CUR.payMonth) CUR.payMonth = curMonth();
+  if (!CUR.repMonth) CUR.repMonth = curMonth();
+  renderTabs(); go('home');
+}
+function renderTabs() {
+  $('#tabs').innerHTML = TABS.map(([k, l]) =>
+    `<button class="${CUR.tab === k ? 'on' : ''}" onclick="go('${k}')">${l}</button>`).join('');
+}
+function go(tab) { CUR.tab = tab; renderTabs(); render(); window.scrollTo({ top: 0 }); }
+function render() {
+  const m = $('#main');
+  if (CUR.tab === 'home') m.innerHTML = vHome();
+  else if (CUR.tab === 'emps') m.innerHTML = vEmps();
+  else if (CUR.tab === 'pay') { m.innerHTML = vPay(); bindPayCalc(); }
+  else if (CUR.tab === 'report') m.innerHTML = vReport();
+  else if (CUR.tab === 'set') m.innerHTML = vSet();
+}
+
+/* ===================== الرئيسية ===================== */
+function monthPays(m) { return DB.pays.filter(p => p.month === m); }
+function vHome() {
+  const emps = DB.employees.filter(e => e.active !== false);
+  const mp = monthPays(curMonth());
+  const tSal = mp.reduce((a, p) => a + num(p.salary), 0);
+  const tDed = mp.reduce((a, p) => a + num(p.deduction), 0);
+  const tBon = mp.reduce((a, p) => a + num(p.bonus), 0);
+  const tNet = mp.reduce((a, p) => a + num(p.net), 0);
+  const lastPays = [...DB.pays].sort((a, b) => (b.payDate || '').localeCompare(a.payDate || '')).slice(0, 6);
+  return `
+  <div class="statgrid" style="margin-bottom:14px">
+    <div class="stat"><span>👥 الموظفون</span><b>${emps.length}</b></div>
+    <div class="stat"><span>💵 رواتب ${monthLabel(curMonth())}</span><b>${fmt(tSal)} ج.م</b></div>
+    <div class="stat"><span>✂️ خصومات الشهر</span><b style="color:var(--red)">${fmt(tDed)} ج.م</b></div>
+    <div class="stat"><span>✅ صافي الشهر</span><b style="color:var(--green)">${fmt(tNet)} ج.م</b></div>
+  </div>
+  <div class="card">
+    <h3>⚡ إجراءات سريعة</h3>
+    <div class="rowbtns">
+      <button class="btn btn-p btn-sm" onclick="go('pay')">💵 تسجيل قبض</button>
+      <button class="btn btn-o btn-sm" onclick="empModal()">➕ موظف جديد</button>
+      <button class="btn btn-o btn-sm" onclick="go('report')">📊 التقرير</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>🕐 آخر عمليات القبض</h3>
+    ${lastPays.length ? lastPays.map(p => {
+      const e = DB.employees.find(x => x.id === p.empId);
+      return `<div class="emp-row"><div class="av">${esc((e ? e.name : '؟').trim()[0] || '؟')}</div>
+        <div class="info"><b>${esc(e ? e.name : 'موظف محذوف')}</b><span>${monthLabel(p.month)} · قبض بتاريخ ${p.payDate || '—'}</span></div>
+        <div style="text-align:left"><b>${fmt(p.net)} ج.م</b><br>${num(p.deduction) ? `<span class="chip red">خصم ${fmt(p.deduction)}</span>` : '<span class="chip green">بدون خصم</span>'}</div></div>`;
+    }).join('') : '<div class="empty">لسه مفيش عمليات قبض مسجلة</div>'}
+  </div>`;
+}
+
+/* ===================== الموظفون ===================== */
+function vEmps() {
+  return `
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">👥 الموظفون (${DB.employees.length})</h3>
+      <button class="btn btn-p btn-sm" onclick="empModal()">➕ جديد</button>
+    </div>
+    ${DB.employees.length ? DB.employees.map(e => `
+      <div class="emp-row">
+        <div class="av">${esc(e.name.trim()[0] || '؟')}</div>
+        <div class="info"><b>${esc(e.name)}</b>
+          <span>الراتب: ${fmt(e.salary)} ج.م${e.phone ? ' · 📱 ' + esc(e.phone) : ''}${e.qr ? ' · 📷 له QR تحويل' : ''}${e.active === false ? ' · متوقف' : ''}</span></div>
+        <div class="rowbtns">
+          <button class="btn btn-o btn-sm" onclick="empModal('${e.id}')">تعديل</button>
+          <button class="btn btn-danger btn-sm" onclick="delEmp('${e.id}')">حذف</button>
+        </div>
+      </div>`).join('') : '<div class="empty">مفيش موظفين لسه — دوس «جديد» عشان تضيف أول موظف</div>'}
+  </div>`;
+}
+function empModal(id) {
+  const e = id ? DB.employees.find(x => x.id === id) : null;
+  openModal(`
+    <h3>${e ? 'تعديل موظف' : 'موظف جديد'}</h3>
+    <div class="field"><label>الاسم</label><input class="inp" id="em-name" value="${e ? esc(e.name) : ''}"></div>
+    <div class="grid2">
+      <div class="field"><label>الراتب الأساسي (ج.م)</label><input class="inp" id="em-salary" inputmode="decimal" value="${e ? e.salary : ''}"></div>
+      <div class="field"><label>رقم الواتساب (اختياري)</label><input class="inp" id="em-phone" inputmode="numeric" maxlength="15" placeholder="2010xxxxxxxx" value="${e ? esc(e.phone || '') : ''}"></div>
+    </div>
+    <div class="field"><label>QR التحويل (إنستا باي / فودافون كاش)</label>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="qrprev" onclick="$('#em-qr-file').click()">${e && e.qr ? `<img src="${e.qr}" alt="QR">` : '<span>اضغط لرفع صورة QR</span>'}</div>
+        <div style="flex:1">
+          <input type="file" id="em-qr-file" accept="image/*" class="hidden" onchange="qrChosen(this)">
+          <input class="inp" id="em-qrlabel" placeholder="نوع المحفظة — مثال: إنستا باي" value="${e ? esc(e.qrLabel || '') : ''}" style="margin-bottom:8px">
+          ${e && e.qr ? '<button class="btn btn-danger btn-sm" onclick="delEmpQr()">🗑️ مسح QR</button>' : ''}
+        </div>
+      </div>
+    </div>
+    <div class="rowbtns">
+      <button class="btn btn-p" style="flex:1" onclick="saveEmp('${e ? e.id : ''}')">💾 حفظ</button>
+      <button class="btn btn-o" onclick="closeModal()">إلغاء</button>
+    </div>`);
+}
+let tmpQr = null;
+function qrChosen(inp) {
+  const f = inp.files && inp.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { tmpQr = r.result; $('.qrprev').innerHTML = `<img src="${tmpQr}" alt="QR">`; };
+  r.readAsDataURL(f);
+}
+function delEmpQr() { tmpQr = ''; $('.qrprev').innerHTML = '<span>اضغط لرفع صورة QR</span>'; }
+function saveEmp(id) {
+  const name = $('#em-name').value.trim();
+  const salary = num($('#em-salary').value);
+  if (!name) return toast('اكتب اسم الموظف', 'err');
+  if (!salary) return toast('اكتب الراتب الأساسي', 'err');
+  const phone = $('#em-phone').value.trim();
+  const qrLabel = $('#em-qrlabel').value.trim();
+  if (id) {
+    const e = DB.employees.find(x => x.id === id);
+    Object.assign(e, { name, salary, phone, qrLabel });
+    if (tmpQr !== null) e.qr = tmpQr || '';
+  } else {
+    DB.employees.push({ id: uid(), name, salary, phone, qrLabel, qr: tmpQr || '', active: true, createdAt: Date.now() });
+  }
+  save(); tmpQr = null; closeModal(); render();
+  toast('تم الحفظ ✅', 'ok');
+}
+function delEmp(id) {
+  const e = DB.employees.find(x => x.id === id);
+  openModal(`<h3>حذف موظف</h3><p class="muted">هتحذف «${esc(e.name)}» وكل سجلات قبضه. متأكد؟</p>
+    <div class="rowbtns"><button class="btn btn-danger" style="flex:1" onclick="delEmpYes('${id}')">نعم، احذف</button>
+    <button class="btn btn-o" onclick="closeModal()">إلغاء</button></div>`);
+}
+function delEmpYes(id) {
+  DB.employees = DB.employees.filter(x => x.id !== id);
+  DB.pays = DB.pays.filter(p => p.empId !== id);
+  save(); closeModal(); render(); toast('اتحذف ✅', 'ok');
+}
+
+/* ===================== تسجيل القبض ===================== */
+function payOf(empId, month) { return DB.pays.find(p => p.empId === empId && p.month === month); }
+function vPay() {
+  const emps = DB.employees.filter(e => e.active !== false);
+  return `
+  <div class="card">
+    <div class="grid2" style="align-items:end">
+      <div class="field" style="margin:0"><label>شهر الرواتب</label><input type="month" class="inp" id="pay-month" value="${CUR.payMonth}" onchange="CUR.payMonth=this.value;render()"></div>
+      <div class="field" style="margin:0"><label>&nbsp;</label><div class="chip" style="font-size:.85rem;padding:8px 14px">${monthLabel(CUR.payMonth)}</div></div>
+    </div>
+  </div>
+  ${emps.length ? emps.map(e => payCard(e)).join('') : '<div class="empty">مفيش موظفين — ضيف موظفين الأول من تبويب «الموظفون»</div>'}`;
+}
+function payCard(e) {
+  const p = payOf(e.id, CUR.payMonth);
+  const salary = p ? p.salary : e.salary;
+  const deduction = p ? p.deduction : 0;
+  const bonus = p ? p.bonus : 0;
+  const reason = p ? (p.deductReason || '') : '';
+  const payDate = p && p.payDate ? p.payDate : today();
+  const net = num(salary) - num(deduction) + num(bonus);
+  return `
+  <div class="paycard" id="pc-${e.id}">
+    <div class="ph">
+      <b>👤 ${esc(e.name)} ${p ? '<span class="chip green">تم القبض ✓</span>' : ''}</b>
+      <div class="rowbtns">
+        ${e.qr ? `<button class="btn btn-o btn-sm" onclick="showQr('${e.id}')">📷 QR</button>` : ''}
+        ${p ? `<button class="btn btn-o btn-sm" onclick="waSend('${p.id}')">🟢 واتساب</button>` : ''}
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>الراتب (ج.م)</label><input class="inp pc-inp" inputmode="decimal" id="s-${e.id}" value="${salary}" oninput="calcNet('${e.id}')"></div>
+      <div class="field"><label>الخصم (ج.م)</label><input class="inp pc-inp" inputmode="decimal" id="d-${e.id}" value="${deduction || ''}" placeholder="0" oninput="dedToggled('${e.id}');calcNet('${e.id}')"></div>
+      <div class="field" id="fr-${e.id}"><label>سبب الخصم ${num(deduction) ? '' : '🔒 (اتفتح لما تكتب خصم)'}</label><input class="inp" id="r-${e.id}" value="${esc(reason)}" placeholder="مثال: غيام يومين" ${num(deduction) ? '' : 'disabled'}></div>
+      <div class="field"><label>مكافأة (ج.م)</label><input class="inp pc-inp" inputmode="decimal" id="b-${e.id}" value="${bonus || ''}" placeholder="0" oninput="calcNet('${e.id}')"></div>
+      <div class="field"><label>تاريخ القبض</label><input type="date" class="inp" id="dt-${e.id}" value="${payDate}"></div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <div class="netpill" style="flex:1" id="np-${e.id}">${fmt(net)} ج.م<small>الصافي (يتحسب تلقائي)</small></div>
+      <button class="btn btn-p" onclick="savePay('${e.id}')">💾 حفظ</button>
+    </div>
+  </div>`;
+}
+function dedToggled(empId) {
+  const has = num($('#d-' + empId).value) > 0;
+  const r = $('#r-' + empId);
+  r.disabled = !has;
+  if (!has) r.value = '';
+  $('#fr-' + empId + ' label').innerHTML = has ? 'سبب الخصم' : 'سبب الخصم 🔒 (اتفتح لما تكتب خصم)';
+}
+function calcNet(empId) {
+  const s = num($('#s-' + empId).value), d = num($('#d-' + empId).value), b = num($('#b-' + empId).value);
+  $('#np-' + empId).innerHTML = fmt(s - d + b) + ' ج.م<small>الصافي (يتحسب تلقائي)</small>';
+}
+function bindPayCalc() {}
+function savePay(empId) {
+  const s = num($('#s-' + empId).value), d = num($('#d-' + empId).value), b = num($('#b-' + empId).value);
+  const reason = $('#r-' + empId).value.trim();
+  const dt = $('#dt-' + empId).value;
+  if (!s) return toast('اكتب الراتب', 'err');
+  if (d < 0 || b < 0) return toast('الخصم والمكافأة مينفعش يكونوا بالسالب', 'err');
+  if (d > 0 && !reason) return toast('اكتب سبب الخصم', 'err');
+  if (d > s) return toast('الخصم أكبر من الراتب!', 'err');
+  const ex = payOf(empId, CUR.payMonth);
+  const rec = { id: ex ? ex.id : uid(), empId, month: CUR.payMonth, salary: s, deduction: d, deductReason: d ? reason : '', bonus: b, net: s - d + b, payDate: dt, updatedAt: Date.now() };
+  if (ex) Object.assign(ex, rec); else DB.pays.push(rec);
+  save(); render(); toast('تم حفظ القبض ✅', 'ok');
+}
+function showQr(empId) {
+  const e = DB.employees.find(x => x.id === empId);
+  openModal(`<h3>📷 تحويل مرتب — ${esc(e.name)}</h3>
+    <p class="muted">${esc(e.qrLabel || 'محفظة إلكترونية')}</p>
+    <div style="background:#fff;border-radius:16px;padding:14px;text-align:center"><img src="${e.qr}" style="width:100%;max-width:280px;border-radius:8px" alt="QR"></div>
+    <button class="btn btn-o btn-block" style="margin-top:12px" onclick="closeModal()">قفل</button>`);
+}
+
+/* ===================== واتساب ===================== */
+function buildWaMsg(p) {
+  const e = DB.employees.find(x => x.id === p.empId);
+  const L = [];
+  L.push('مرحبًا ' + (e ? e.name : '') + ' 👋');
+  L.push('تفاصيل مرتبك عن ' + monthLabel(p.month) + ':');
+  L.push('الراتب: ' + fmt(p.salary) + ' ج.م');
+  if (num(p.deduction)) L.push('الخصم: ' + fmt(p.deduction) + ' ج.م');
+  if (num(p.deduction) && p.deductReason) L.push('سبب الخصم: ' + p.deductReason);
+  if (num(p.bonus)) L.push('مكافأة: ' + fmt(p.bonus) + ' ج.م');
+  L.push('الصافي: ' + fmt(p.net) + ' ج.م');
+  if (DB.settings.waNote) L.push(DB.settings.waNote);
+  return L.join('\n');
+}
+function waSend(payId) {
+  const p = DB.pays.find(x => x.id === payId); if (!p) return;
+  const e = DB.employees.find(x => x.id === p.empId);
+  const to = (e && e.phone) ? e.phone : DB.settings.whatsapp;
+  if (!to) return toast('مفيش رقم واتساب — اضبطه من الإعدادات', 'err');
+  openModal(`<h3>🟢 إرسال عبر واتساب</h3>
+    <p class="muted">الرسالة هتتبعت إلى: <b>${esc(to)}</b>${e && e.phone ? ' (واتساب الموظف)' : ' (الرقم الافتراضي من الإعدادات)'}</p>
+    <div style="background:var(--bg2);border:1px solid var(--stroke);border-radius:12px;padding:12px;font-size:.85rem;white-space:pre-line;line-height:1.9;margin-bottom:12px">${esc(buildWaMsg(p))}</div>
+    <div class="rowbtns">
+      <a class="btn btn-p" style="flex:1;text-decoration:none" href="https://wa.me/${encodeURIComponent(to)}?text=${encodeURIComponent(buildWaMsg(p))}" target="_blank" rel="noopener">فتح واتساب 📲</a>
+      <button class="btn btn-o" onclick="closeModal()">إلغاء</button>
+    </div>`);
+}
+
+/* ===================== التقرير ===================== */
+function vReport() {
+  const all = CUR.repAll;
+  const pays = all ? DB.pays : DB.pays.filter(p => p.month === CUR.repMonth);
+  const rows = DB.employees.map(e => {
+    const ep = pays.filter(p => p.empId === e.id);
+    return {
+      e,
+      cnt: ep.length,
+      sal: ep.reduce((a, p) => a + num(p.salary), 0),
+      ded: ep.reduce((a, p) => a + num(p.deduction), 0),
+      bon: ep.reduce((a, p) => a + num(p.bonus), 0),
+      net: ep.reduce((a, p) => a + num(p.net), 0),
+      last: ep.map(p => p.payDate).sort().pop() || null
+    };
+  }).filter(r => r.cnt > 0);
+  const tSal = rows.reduce((a, r) => a + r.sal, 0);
+  const tDed = rows.reduce((a, r) => a + r.ded, 0);
+  const tBon = rows.reduce((a, r) => a + r.bon, 0);
+  const tNet = rows.reduce((a, r) => a + r.net, 0);
+  return `
+  <div class="card">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:12px">
+      <div class="seg" style="flex:1;margin:0">
+        <button class="${!all ? 'on' : ''}" onclick="CUR.repAll=false;render()">شهر محدد</button>
+        <button class="${all ? 'on' : ''}" onclick="CUR.repAll=true;render()">كل الشهور</button>
+      </div>
+      ${!all ? `<input type="month" class="inp" style="width:auto" value="${CUR.repMonth}" onchange="CUR.repMonth=this.value;render()">` : ''}
+    </div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>الموظف</th><th>الراتب</th><th>الخصومات</th>${all ? '<th>مرات القبض</th>' : ''}<th>آخر قبض</th></tr></thead>
+      <tbody>${rows.length ? rows.map(r => `
+        <tr><td><b>${esc(r.e.name)}</b>${num(r.ded) ? `<br><span class="chip red">خصم إجمالي ${fmt(r.ded)}</span>` : ''}</td>
+        <td>${fmt(r.sal)} ج.م</td><td style="color:var(--red)">${fmt(r.ded)} ج.م</td>${all ? `<td>${r.cnt}</td>` : ''}<td>${r.last || '—'}</td></tr>`).join('')
+        : '<tr><td colspan="5"><div class="empty">مفيش بيانات في الفترة دي</div></td></tr>'}</tbody>
+      <tfoot><tr><td>الإجمالي</td><td>${fmt(tSal)} ج.م</td><td>${fmt(tDed)} ج.م</td>${all ? '<td></td>' : ''}<td></td></tr></tfoot>
+    </table></div>
+    <div class="statgrid" style="margin-top:14px">
+      <div class="stat"><span>إجمالي الرواتب</span><b>${fmt(tSal)} ج.م</b></div>
+      <div class="stat"><span>إجمالي الخصومات</span><b style="color:var(--red)">${fmt(tDed)} ج.م</b></div>
+      <div class="stat"><span>إجمالي المكافآت</span><b style="color:var(--amber)">${fmt(tBon)} ج.م</b></div>
+      <div class="stat"><span>إجمالي الصافي</span><b style="color:var(--green)">${fmt(tNet)} ج.م</b></div>
+    </div>
+  </div>`;
+}
+
+/* ===================== الإعدادات ===================== */
+function vSet() {
+  const s = DB.settings;
+  const preset = ['#14c8b2', '#1e5eff', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#10b981'];
+  return `
+  <div class="card">
+    <h3>🎨 الشكل والهوية</h3>
+    <div class="field"><label>اسم التطبيق</label><input class="inp" id="st-name" value="${esc(s.appName)}"></div>
+    <div class="field"><label>اللون الأساسي</label>
+      <div class="swatches">${preset.map(c => `<button style="background:${c}" class="${s.theme === c ? 'on' : ''}" onclick="$('#st-theme').value='${c}';document.querySelectorAll('.swatches button').forEach(b=>b.classList.remove('on'));this.classList.add('on')"></button>`).join('')}</div>
+      <input type="color" class="inp" id="st-theme" value="${s.theme}" style="height:46px;padding:4px;width:120px">
+    </div>
+    <div class="field"><label>اللوجو</label>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="qrprev" onclick="$('#st-logo-file').click()">${s.logo ? `<img src="${s.logo}" alt="logo">` : '<span>اضغط لرفع لوجو</span>'}</div>
+        <div><input type="file" id="st-logo-file" accept="image/*" class="hidden" onchange="stLogoChosen(this)">
+        ${s.logo ? '<button class="btn btn-danger btn-sm" onclick="stLogoClear()">مسح اللوجو</button>' : ''}</div>
+      </div>
+    </div>
+    <div class="field"><label>التوقيع (بيظهر تحت خالص شمال الصفحة)</label><input class="inp" id="st-sig" value="${esc(s.sig)}"></div>
+  </div>
+  <div class="card">
+    <h3>🟢 واتساب</h3>
+    <div class="field"><label>الرقم الافتراضي (يبعت من عليه لما الموظف ماعندوش رقم)</label><input class="inp" id="st-wa" inputmode="numeric" dir="ltr" value="${esc(s.whatsapp)}"></div>
+    <div class="field"><label>سطر إضافي يتحط آخر الرسالة (اختياري)</label><input class="inp" id="st-wanote" value="${esc(s.waNote)}" placeholder="مثال: للاستفسار تواصل معانا على 010..."></div>
+  </div>
+  <div class="card">
+    <h3>🔑 كلمة المرور</h3>
+    <div class="grid2">
+      <div class="field"><label>الجديدة</label><input class="inp" type="password" id="st-pw1"></div>
+      <div class="field"><label>تأكيدها</label><input class="inp" type="password" id="st-pw2"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>💾 النسخ الاحتياطي</h3>
+    <div class="rowbtns">
+      <button class="btn btn-o btn-sm" onclick="exportDB()">⬇️ تنزيل نسخة احتياطية</button>
+      <button class="btn btn-o btn-sm" onclick="$('#imp-file').click()">⬆️ استعادة من نسخة</button>
+      <input type="file" id="imp-file" accept="application/json" class="hidden" onchange="importDB(this)">
+    </div>
+  </div>
+  <button class="btn btn-p btn-block" onclick="saveSet()">💾 حفظ كل الإعدادات</button>
+  <div style="height:14px"></div>
+  <button class="btn btn-danger btn-block" onclick="wipeAll()">🗑️ مسح كل البيانات نهائيًا</button>`;
+}
+let stTmpLogo = undefined;
+function stLogoChosen(inp) {
+  const f = inp.files && inp.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { stTmpLogo = r.result; $('.qrprev').innerHTML = `<img src="${stTmpLogo}" alt="logo">`; };
+  r.readAsDataURL(f);
+}
+function stLogoClear() { stTmpLogo = ''; $('.qrprev').innerHTML = '<span>اضغط لرفع لوجو</span>'; }
+async function saveSet() {
+  const s = DB.settings;
+  s.appName = $('#st-name').value.trim() || 'رواتب';
+  s.theme = $('#st-theme').value;
+  s.sig = $('#st-sig').value.trim();
+  s.whatsapp = $('#st-wa').value.replace(/[^\d]/g, '');
+  s.waNote = $('#st-wanote').value.trim();
+  if (stTmpLogo !== undefined) s.logo = stTmpLogo;
+  const p1 = $('#st-pw1').value, p2 = $('#st-pw2').value;
+  if (p1 || p2) {
+    if (p1.length < 4) return toast('كلمة المرور 4 حروف على الأقل', 'err');
+    if (p1 !== p2) return toast('كلمتا المرور مش متطابقتين', 'err');
+    s.passHash = await hash(p1);
+  }
+  save(); stTmpLogo = undefined; applyTheme(); render();
+  toast('تم حفظ الإعدادات ✅', 'ok');
+}
+function exportDB() {
+  const blob = new Blob([JSON.stringify(DB)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'رواتب-نسخة-احتياطية-' + today() + '.json';
+  a.click(); URL.revokeObjectURL(a.href);
+  toast('اتنزلت النسخة الاحتياطية ✅', 'ok');
+}
+function importDB(inp) {
+  const f = inp.files && inp.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!d.settings || !Array.isArray(d.employees) || !Array.isArray(d.pays)) throw new Error('bad');
+      DB = d; save(); applyTheme(); render(); toast('تمت الاستعادة ✅', 'ok');
+    } catch (e) { toast('الملف مش صحيح', 'err'); }
+  };
+  r.readAsText(f); inp.value = '';
+}
+function wipeAll() {
+  openModal(`<h3>مسح كل البيانات</h3><p class="muted">هيتمسح كل الموظفين والرواتب والإعدادات نهائيًا. متأكد؟</p>
+    <div class="rowbtns"><button class="btn btn-danger" style="flex:1" onclick="localStorage.removeItem(LS_KEY);location.reload()">نعم، امسح كل حاجة</button>
+    <button class="btn btn-o" onclick="closeModal()">إلغاء</button></div>`);
+}
+
+/* ===================== تشغيل ===================== */
+$('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+load();
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js');
+}
+showAuth();
+</script>
+</body>
+</html>
