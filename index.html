@@ -131,6 +131,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--stroke);border-bottom:none;c
     <img id="auth-logo" src="icons/icon-192.png" alt="">
     <h1 id="auth-title">رواتب</h1>
     <p class="muted" id="auth-sub">سجل دخولك للمتابعة</p>
+    <div class="field" style="text-align:right;display:none" id="un-wrap"><label>اسم المستخدم <span style="font-weight:400;font-size:.7rem">(سيبه فاضي لو أنت المالك)</span></label><input class="inp" id="un" autocomplete="username" placeholder="اسم المستخدم — للمالك: سيبه فاضي"></div>
     <div class="field" style="text-align:right"><label>كلمة المرور</label><input class="inp" type="password" id="pw" autocomplete="current-password"></div>
     <button class="btn btn-p btn-block" id="auth-btn" onclick="doLogin()">دخول</button>
     <p class="muted" id="auth-hint" style="margin-top:12px"></p>
@@ -175,10 +176,12 @@ function defDB() {
       whatsapp: '20106051837',
       waNote: '',
       currency: 'EGP',
-      fx: {}
+      fx: {},
+      specialties: []
     },
     employees: [],
-    pays: []
+    pays: [],
+    places: []
   };
 }
 function load() {
@@ -187,7 +190,36 @@ function load() {
   DB.settings = Object.assign(defDB().settings, DB.settings || {});
   DB.employees = DB.employees || [];
   DB.pays = DB.pays || [];
+  DB.places = DB.places || [];
 }
+
+/* ===================== الجلسات والأماكن (لوحة التحكم) ===================== */
+/* SESS = {role:'owner'} للمالك — أو {role:'place', placeId, user, placeName} ليوزر مكان */
+let SESS = null;
+const SESS_KEY = 'rawatb_sess';
+function isOwner() { return !SESS || SESS.role === 'owner'; }
+function myPlaceId() { return (SESS && SESS.role === 'place') ? SESS.placeId : null; }
+/* الموظفين اللي الجلسة الحالية شايفاهم — المالك يشوف الكل، يوزر المكان يشوف مكانه بس */
+function myEmps() { const pid = myPlaceId(); return pid ? DB.employees.filter(e => e.placeId === pid) : DB.employees; }
+function myEmp(id) { return myEmps().find(e => e.id === id); }
+function myPays() {
+  const pid = myPlaceId();
+  if (!pid) return DB.pays;
+  const ids = {}; myEmps().forEach(e => { ids[e.id] = 1; });
+  return DB.pays.filter(p => p.placeId === pid || (ids[p.empId] && !p.placeId));
+}
+function sessSave() { try { sessionStorage.setItem(SESS_KEY, JSON.stringify(SESS || { role: 'owner' })); } catch (e) {} }
+function sessRestore() {
+  try {
+    const s = JSON.parse(sessionStorage.getItem(SESS_KEY) || 'null');
+    if (!s) return null;
+    if (s.role === 'owner') return { role: 'owner' };
+    const pl = (DB.places || []).find(x => x.id === s.placeId);
+    if (pl && (pl.users || []).some(u => u.user === s.user)) return { role: 'place', placeId: pl.id, user: s.user, placeName: pl.name };
+    return null;
+  } catch (e) { return null; }
+}
+function sessClear() { try { sessionStorage.removeItem(SESS_KEY); } catch (e) {} }
 function save() { localStorage.setItem(LS_KEY, JSON.stringify(DB)); cloudPush(); }
 
 /* ===================== السحابة (Firebase RTDB) ===================== */
@@ -305,6 +337,8 @@ function cloudSessionWatch() {
       try { await cloudAttach(); } catch (e) { CLOUD.ready = false; CLOUD.started = false; cloudStatusUI(); return; }
       if (!ME_IN) {
         ME_IN = true;
+        /* رجّع الجلسة اللي كانت شغالة على الجهاز ده — يوزر مكان يرجع مكانه، والمالك يرجع مالك */
+        SESS = sessRestore() || { role: 'owner' };
         toast('☁️ اتصلنا بالسحابة تلقائيًا — بياناتك بتتزامن لحظيًا على كل الأجهزة', 'ok');
         boot();
       }
@@ -370,7 +404,21 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 /* ===================== الجلسة ===================== */
 async function doLogin() {
   const p = $('#pw').value;
+  const un = ($('#un') ? $('#un').value : '').trim().toLowerCase();
   if (!p) return toast('اكتب كلمة المرور', 'err');
+  /* دخول يوزر مكان: اسم مستخدم + كلمة مرور — كل مكان يشوف بياناته بس */
+  if (un && un !== 'admin') {
+    let found = null, fPlace = null;
+    (DB.places || []).forEach(pl => (pl.users || []).forEach(u => { if (u.user === un) { found = u; fPlace = pl; } }));
+    if (!found) return toast('اسم المستخدم غلط ❌ — المالك يسيب اسم المستخدم فاضي', 'err');
+    if (await hash(un + '::' + p) !== found.hash) return toast('كلمة المرور غلط ❌', 'err');
+    SESS = { role: 'place', placeId: fPlace.id, user: un, placeName: fPlace.name };
+    sessSave();
+    ME_IN = true; $('#pw').value = ''; boot();
+    toast('أهلًا بيك — ' + fPlace.name + ' ✅', 'ok');
+    return;
+  }
+  /* دخول المالك */
   if (!DB.settings.passHash) {
     if (p.length < 4) return toast('كلمة المرور 4 حروف على الأقل', 'err');
     DB.settings.passHash = await hash(p); save();
@@ -378,21 +426,29 @@ async function doLogin() {
   } else if (await hash(p) !== DB.settings.passHash) {
     return toast('كلمة المرور غلط ❌', 'err');
   }
+  SESS = { role: 'owner' }; sessSave();
   ME_IN = true; $('#pw').value = ''; boot();
   if (p.length >= 6) cloudStart(p);
   else { CLOUD.err = 'weak'; cloudStatusUI(); }
 }
-function lock() { _locked = true; ME_IN = false; showAuth(); }
+function lock() { _locked = true; ME_IN = false; sessClear(); SESS = null; showAuth(); }
 function showAuth() {
   $('#app').classList.add('hidden');
   const a = $('#auth'); a.classList.remove('hidden');
   const s = DB.settings;
   $('#auth-logo').src = s.logo || 'icons/icon-192.png';
   $('#auth-title').textContent = s.appName;
+  const unWrap = $('#un-wrap');
+  if (unWrap) unWrap.style.display = (DB.places || []).some(pl => (pl.users || []).length) ? '' : 'none';
+  if ($('#un')) $('#un').value = '';
   if (!s.passHash) {
-    $('#auth-sub').textContent = 'أول مرة هنا؟ عمل كلمة مرور خاصة بيك';
+    $('#auth-sub').textContent = 'أول مرة هنا؟ عمل كلمة مرور خاصة بيك (دي كلمة مرور المالك)';
     $('#auth-btn').textContent = 'إنشاء كلمة المرور';
     $('#auth-hint').textContent = 'احفظها كويس — هي اللي بتحمي بيانات الرواتب';
+  } else if ((DB.places || []).some(pl => (pl.users || []).length)) {
+    $('#auth-sub').textContent = 'سجل دخولك — المالك يسيب «اسم المستخدم» فاضي ويكتب بس كلمة المرور';
+    $('#auth-btn').textContent = 'دخول';
+    $('#auth-hint').textContent = 'لو معاك يوزر من صاحب العمل: اكتب اسم المستخدم وكلمة المرور اللي اتدتهالك';
   } else {
     $('#auth-sub').textContent = 'سجل دخولك للمتابعة';
     $('#auth-btn').textContent = 'دخول';
@@ -421,8 +477,11 @@ const TABS = [
   ['emps', '👥 الموظفون'],
   ['pay', '💵 تسجيل القبض'],
   ['report', '📊 التقرير'],
-  ['set', '⚙️ الإعدادات']
+  ['set', '⚙️ الإعدادات'],
+  ['panel', '🎛️ الأماكن']
 ];
+/* يوزر المكان يشوف شغله بس — من غير إعدادات ولا لوحة تحكم */
+function visibleTabs() { return isOwner() ? TABS : TABS.filter(([k]) => !['set', 'panel'].includes(k)); }
 function boot() {
   applyTheme();
   $('#auth').classList.add('hidden');
@@ -432,8 +491,12 @@ function boot() {
   renderTabs(); go('home');
 }
 function renderTabs() {
-  $('#tabs').innerHTML = TABS.map(([k, l]) =>
-    `<button class="${CUR.tab === k ? 'on' : ''}" onclick="go('${k}')">${l}</button>`).join('');
+  const tabs = visibleTabs();
+  if (!tabs.some(([k]) => k === CUR.tab)) CUR.tab = 'home';
+  const who = (SESS && SESS.role === 'place') ? `🏢 ${esc(SESS.placeName)} · ${esc(SESS.user)}` : '👑 المالك';
+  $('#tabs').innerHTML = tabs.map(([k, l]) =>
+    `<button class="${CUR.tab === k ? 'on' : ''}" onclick="go('${k}')">${l}</button>`).join('') +
+    `<span class="chip" style="margin-inline-start:auto;font-size:.68rem">${who}</span>`;
 }
 function go(tab) { CUR.tab = tab; CUR.empPage = null; CUR.payEmp = null; renderTabs(); render(); window.scrollTo({ top: 0 }); }
 function render() {
@@ -443,19 +506,20 @@ function render() {
   else if (CUR.tab === 'emps') m.innerHTML = vEmps();
   else if (CUR.tab === 'pay') { m.innerHTML = vPay(); bindPayCalc(); }
   else if (CUR.tab === 'report') m.innerHTML = vReport();
-  else if (CUR.tab === 'set') m.innerHTML = vSet();
+  else if (CUR.tab === 'set') { if (!isOwner()) { CUR.tab = 'home'; m.innerHTML = vHome(); return; } m.innerHTML = vSet(); }
+  else if (CUR.tab === 'panel') { if (!isOwner()) { CUR.tab = 'home'; m.innerHTML = vHome(); return; } m.innerHTML = vPanel(); }
 }
 
 /* ===================== الرئيسية ===================== */
-function monthPays(m) { return DB.pays.filter(p => p.month === m); }
+function monthPays(m) { return myPays().filter(p => p.month === m); }
 function vHome() {
-  const emps = DB.employees.filter(e => e.active !== false);
+  const emps = myEmps().filter(e => e.active !== false);
   const mp = monthPays(curMonth());
   const tSal = mp.reduce((a, p) => a + num(p.salary), 0);
   const tDed = mp.reduce((a, p) => a + num(p.deduction), 0);
   const tBon = mp.reduce((a, p) => a + num(p.bonus), 0);
   const tNet = mp.reduce((a, p) => a + num(p.net), 0);
-  const lastPays = [...DB.pays].sort((a, b) => (b.payDate || '').localeCompare(a.payDate || '')).slice(0, 6);
+  const lastPays = [...myPays()].sort((a, b) => (b.payDate || '').localeCompare(a.payDate || '')).slice(0, 6);
   return `
   <div class="statgrid" style="margin-bottom:14px">
     <div class="stat"><span>👥 الموظفون</span><b>${emps.length}</b></div>
@@ -474,7 +538,7 @@ function vHome() {
   <div class="card">
     <h3>🕐 آخر عمليات القبض</h3>
     ${lastPays.length ? lastPays.map(p => {
-      const e = DB.employees.find(x => x.id === p.empId);
+      const e = myEmps().find(x => x.id === p.empId);
       return `<div class="emp-row"><div class="av">${esc((e ? e.name : '؟').trim()[0] || '؟')}</div>
         <div class="info"><b>${esc(e ? e.name : 'موظف محذوف')}</b><span>${monthLabel(p.month)} · قبض بتاريخ ${p.payDate || '—'}</span></div>
         <div style="text-align:left"><b>${fmt(p.net)} ${curSym()}</b><br>${num(p.deduction) ? `<span class="chip red">خصم ${fmt(p.deduction)}</span>` : '<span class="chip green">بدون خصم</span>'}</div></div>`;
@@ -487,14 +551,14 @@ function vEmps() {
   return `
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <h3 style="margin:0">👥 الموظفون (${DB.employees.length})</h3>
+      <h3 style="margin:0">👥 الموظفون (${myEmps().length})${SESS && SESS.role === 'place' ? ` — <span style="font-size:.75rem;color:var(--acc)">${esc(SESS.placeName)}</span>` : ''}</h3>
       <button class="btn btn-p btn-sm" onclick="empModal()">➕ جديد</button>
     </div>
-    ${DB.employees.length ? DB.employees.map(e => `
+    ${myEmps().length ? myEmps().map(e => `
       <div class="emp-row">
         ${e.photo ? `<div class="av" style="padding:0;overflow:hidden"><img src="${e.photo}" alt="" style="width:100%;height:100%;object-fit:cover"></div>` : `<div class="av">${esc(e.name.trim()[0] || '؟')}</div>`}
         <div class="info"><b style="cursor:pointer;color:var(--acc)" onclick="empProfile('${e.id}')">${esc(e.name)} 👤</b>
-          <span>الراتب: ${fmt(e.salary)} ${curSym()}${e.phone ? ' · 📱 ' + esc(e.phone) : ''}${e.qr ? ' · 📷 له QR تحويل' : ''}${shiftOf(e) ? ' · ⏱ ' + esc(shiftLabel(e)) : ''}${e.active === false ? ' · متوقف' : ''}</span></div>
+          <span>الراتب: ${fmt(e.salary)} ${curSym()}${e.specialty ? ' · 🩺 ' + esc(e.specialty) : ''}${e.phone ? ' · 📱 ' + esc(e.phone) : ''}${e.qr ? ' · 📷 له QR تحويل' : ''}${shiftOf(e) ? ' · ⏱ ' + esc(shiftLabel(e)) : ''}${e.active === false ? ' · متوقف' : ''}</span></div>
         <div class="rowbtns">
           <button class="btn btn-o btn-sm" onclick="empModal('${e.id}')">تعديل</button>
           <button class="btn btn-danger btn-sm" onclick="delEmp('${e.id}')">حذف</button>
@@ -503,11 +567,11 @@ function vEmps() {
   </div>`;
 }
 /* ===================== ملف الموظف ===================== */
-function empProfile(id) { CUR.empPage = id; render(); window.scrollTo({ top: 0 }); }
+function empProfile(id) { if (!myEmp(id)) return toast('الموظف مش موجود ❌', 'err'); CUR.empPage = id; render(); window.scrollTo({ top: 0 }); }
 function vEmpProfile(id) {
-  const e = DB.employees.find(x => x.id === id);
+  const e = myEmp(id);
   if (!e) { CUR.empPage = null; return '<div class="card"><div class="empty">الموظف مش موجود — ارجع للموظفين</div></div>'; }
-  const pays = DB.pays.filter(p => p.empId === id);
+  const pays = myPays().filter(p => p.empId === id);
   const last = [...pays].sort((a, b) => (b.payDate || '').localeCompare(a.payDate || ''))[0];
   const totalPaid = pays.reduce((a, p) => a + num(p.net), 0);
   const r = num(e.raiseRate);
@@ -559,7 +623,7 @@ function vEmpProfile(id) {
   </div>`;
 }
 function saveEmpProfile(id) {
-  const e = DB.employees.find(x => x.id === id); if (!e) return;
+  const e = myEmp(id); if (!e) return;
   e.raiseRate = num($('#pf-raise').value);
   e.raiseType = $('#pf-raisetype').value;
   e.hireDate = $('#pf-hire').value;
@@ -575,6 +639,18 @@ function empModal(id) {
     <div class="grid2">
       <div class="field"><label>الراتب الأساسي (بالعملة)</label><input class="inp" id="em-salary" inputmode="decimal" value="${e ? e.salary : ''}"></div>
       <div class="field"><label>رقم الواتساب (اختياري)</label><input class="inp" id="em-phone" inputmode="numeric" maxlength="15" placeholder="2010xxxxxxxx" value="${e ? esc(e.phone || '') : ''}"></div>
+    </div>
+    ${isOwner() && (DB.places || []).length ? `<div class="field"><label>🏢 المكان <span style="font-weight:400;color:var(--muted);font-size:.72rem">(بيتحدد من لوحة «الأماكن» — كل مكان يشوف موظفيه بس)</span></label>
+      <select class="inp" id="em-place">
+        <option value="">— بدون مكان (شغل المالك الخاص) —</option>
+        ${DB.places.map(pl => `<option value="${pl.id}" ${e && e.placeId === pl.id ? 'selected' : ''}>${esc(pl.name)}</option>`).join('')}
+      </select></div>` : ''}
+    <div class="field"><label>🩺 التخصص <span style="font-weight:400;color:var(--muted);font-size:.72rem">(القايمة بتتكتب في الإعدادات ← التخصصات)</span></label>
+      <select class="inp" id="em-spec">
+        <option value="">— بدون تخصص —</option>
+        ${(DB.settings.specialties || []).map(sp => `<option value="${esc(sp)}" ${e && e.specialty === sp ? 'selected' : ''}>${esc(sp)}</option>`).join('')}
+      </select>
+      ${(DB.settings.specialties || []).length ? '' : '<div style="font-size:.72rem;color:var(--amber);margin-top:4px">⚠️ القايمة فاضية لسه — روح الإعدادات واكتب التخصصات الأول</div>'}
     </div>
     <div class="field"><label>صورة الموظف (اختياري)</label>
       <div style="display:flex;gap:12px;align-items:center">
@@ -668,6 +744,11 @@ function saveEmp(id) {
   if (!name) return toast('اكتب اسم الموظف', 'err');
   if (!salary) return toast('اكتب الراتب الأساسي', 'err');
   const phone = $('#em-phone').value.trim();
+  const specEl = $('#em-spec');
+  const specialty = specEl ? specEl.value : '';
+  /* المكان: يوزر المكان مربوط بمكانه دايمًا — المالك يختار من القايمة */
+  const placeEl = $('#em-place');
+  const placeId = isOwner() ? (placeEl ? placeEl.value || null : null) : myPlaceId();
   const qrLabel = $('#em-qrlabel').value.trim();
   const shType = $('#em-shtype').value;
   const shDays = [...document.querySelectorAll('.shday:checked')].map(x => x.value);
@@ -676,19 +757,19 @@ function saveEmp(id) {
   if (!shH) shH = hoursBetween(shFrom, shTo);
   const shift = (shType && shDays.length && shH > 0) ? { type: shType, from: shFrom, to: shTo, hours: shH, days: shDays } : null;
   if (id) {
-    const e = DB.employees.find(x => x.id === id);
-    Object.assign(e, { name, salary, phone, qrLabel, shift });
+    const e = myEmp(id); if (!e) return toast('الموظف مش موجود ❌', 'err');
+    Object.assign(e, { name, salary, phone, qrLabel, shift, specialty, placeId });
     if (tmpQr !== null) e.qr = tmpQr || '';
     if (tmpPhoto !== null) e.photo = tmpPhoto || '';
     e.updatedAt = Date.now();
   } else {
-    DB.employees.push({ id: uid(), name, salary, phone, qrLabel, shift, qr: tmpQr || '', photo: tmpPhoto || '', active: true, createdAt: Date.now(), updatedAt: Date.now() });
+    DB.employees.push({ id: uid(), name, salary, phone, qrLabel, shift, specialty, placeId, qr: tmpQr || '', photo: tmpPhoto || '', active: true, createdAt: Date.now(), updatedAt: Date.now() });
   }
   save(); tmpQr = null; tmpPhoto = null; closeModal(); render();
   toast('تم الحفظ ✅', 'ok');
 }
 function delEmp(id) {
-  const e = DB.employees.find(x => x.id === id);
+  const e = myEmp(id); if (!e) return;
   openModal(`<h3>حذف موظف</h3><p class="muted">هتحذف «${esc(e.name)}» وكل سجلات قبضه. متأكد؟</p>
     <div class="rowbtns"><button class="btn btn-danger" style="flex:1" onclick="delEmpYes('${id}')">نعم، احذف</button>
     <button class="btn btn-o" onclick="closeModal()">إلغاء</button></div>`);
@@ -703,7 +784,7 @@ function delEmpYes(id) {
 /* ===================== تسجيل القبض ===================== */
 function payOf(empId, month) { return DB.pays.find(p => p.empId === empId && p.month === month); }
 function vPay() {
-  const emps = DB.employees.filter(e => e.active !== false);
+  const emps = myEmps().filter(e => e.active !== false);
   const head = `
   <div class="card">
     <div class="grid2" style="align-items:end">
@@ -713,7 +794,7 @@ function vPay() {
   </div>`;
   /* شاشة فرعية: تسجيل قبض موظف واحد */
   if (CUR.payEmp) {
-    const e = DB.employees.find(x => x.id === CUR.payEmp);
+    const e = myEmp(CUR.payEmp);
     if (!e) CUR.payEmp = null;
     else return head + `
     <div class="card" style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px">
@@ -1049,7 +1130,7 @@ function salChanged(empId) {
 }
 /* بعد ما البطاقات تترسم: عبّى الخصومات بالوحدة المختارة والمستحقات الأولية */
 function bindPayCalc() {
-  DB.employees.filter(e => e.active !== false).forEach(e => {
+  myEmps().filter(e => e.active !== false).forEach(e => {
     if ($('#pc-' + e.id)) { dedHint(e.id); deserveUI(e.id); }
   });
 }
@@ -1062,10 +1143,10 @@ function savePay(empId) {
   if (d > 0 && !reason) return toast('اكتب سبب الخصم', 'err');
   if (d > s) return toast('الخصم أكبر من الراتب!', 'err');
   const ex = payOf(empId, CUR.payMonth);
-  const e0 = DB.employees.find(x => x.id === empId);
+  const e0 = myEmp(empId);
   const aEl = $('#a-' + empId), hEl = $('#h-' + empId);
   const duEl = $('#du-' + empId);
-  const rec = { id: ex ? ex.id : uid(), empId, month: CUR.payMonth, salary: s, deduction: d, dedUnit: duEl ? duEl.value : 'fixed', deductReason: d ? reason : '', bonus: b, net: s - d + b, payDate: dt, absDays: aEl ? num(aEl.value) : 0, hoursExp: hEl && e0 ? expectedHours(e0, CUR.payMonth) : null, hoursAtt: hEl ? num(hEl.value) : null, updatedAt: Date.now() };
+  const rec = { id: ex ? ex.id : uid(), empId, month: CUR.payMonth, salary: s, deduction: d, dedUnit: duEl ? duEl.value : 'fixed', deductReason: d ? reason : '', bonus: b, net: s - d + b, payDate: dt, absDays: aEl ? num(aEl.value) : 0, hoursExp: hEl && e0 ? expectedHours(e0, CUR.payMonth) : null, hoursAtt: hEl ? num(hEl.value) : null, placeId: e0 ? (e0.placeId || null) : (myPlaceId() || null), updatedAt: Date.now() };
   if (ex) Object.assign(ex, rec); else DB.pays.push(rec);
   save(); render(); toast('تم حفظ القبض ✅', 'ok');
 }
@@ -1104,8 +1185,8 @@ function buildWaMsg(p) {
   return L.join('\n');
 }
 function waSend(payId) {
-  const p = DB.pays.find(x => x.id === payId); if (!p) return;
-  const e = DB.employees.find(x => x.id === p.empId);
+  const p = myPays().find(x => x.id === payId); if (!p) return;
+  const e = myEmps().find(x => x.id === p.empId);
   const to = (e && e.phone) ? e.phone : DB.settings.whatsapp;
   if (!to) return toast('مفيش رقم واتساب — اضبطه من الإعدادات', 'err');
   openModal(`<h3>🟢 إرسال عبر واتساب</h3>
@@ -1120,8 +1201,8 @@ function waSend(payId) {
 /* ===================== التقرير ===================== */
 function vReport() {
   const all = CUR.repAll;
-  const pays = all ? DB.pays : DB.pays.filter(p => p.month === CUR.repMonth);
-  const rows = DB.employees.map(e => {
+  const pays = all ? myPays() : myPays().filter(p => p.month === CUR.repMonth);
+  const rows = myEmps().map(e => {
     const ep = pays.filter(p => p.empId === e.id);
     return {
       e,
@@ -1166,6 +1247,7 @@ function vReport() {
 /* ===================== الإعدادات ===================== */
 function vSet() {
   const s = DB.settings;
+  window.tmpSpecs = JSON.parse(JSON.stringify(s.specialties || []));
   const preset = ['#14c8b2', '#1e5eff', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#10b981'];
   return `
   <div class="card">
@@ -1194,6 +1276,14 @@ function vSet() {
       <div class="field" id="st-fxwrap" style="margin:0;display:${(s.currency || 'EGP') === 'EGP' ? 'none' : 'block'}"><label>سعر العملة بالجنيه (1 وحدة = كام ج.م)</label><input class="inp" id="st-fx" inputmode="decimal" value="${(s.fx || {})[s.currency || 'EGP'] || FX_DEFAULT[s.currency || 'EGP'] || 1}"></div>
     </div>
     <p class="muted" style="font-size:.72rem;margin-top:8px">لو غيّرت العملة، كل المبالغ (رواتب وخصومات ومكافآت وسجلات قبض) هتتحوّل تلقائيًا للعملة الجديدة بالسعر اللي كتبته.</p>
+  </div>
+  <div class="card">
+    <h3>🩺 التخصصات <span style="font-weight:400;font-size:.75rem;color:var(--muted)">— بتظهر قايمة اختيار عند تسجيل موظف جديد</span></h3>
+    <div id="spec-chips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${specChipsHtml()}</div>
+    <div style="display:flex;gap:8px">
+      <input class="inp" id="spec-new" placeholder="اكتب تخصص جديد — مثال: محاسب، ممرض، استقبال" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();specAdd()}">
+      <button class="btn btn-p btn-sm" onclick="specAdd()">➕ إضافة</button>
+    </div>
   </div>
   <div class="card">
     <h3>🟢 واتساب</h3>
@@ -1227,6 +1317,22 @@ function vSet() {
   <button class="btn btn-danger btn-block" onclick="wipeAll()">🗑️ مسح كل البيانات نهائيًا</button>`;
 }
 let stTmpLogo = undefined;
+/* ---------- التخصصات: قايمة بتتكتب في الإعدادات وبتظهر اختيار عند تسجيل موظف ---------- */
+function specChipsHtml() {
+  const list = (typeof tmpSpecs !== 'undefined' && tmpSpecs) ? tmpSpecs : (DB.settings.specialties || []);
+  if (!list.length) return '<span class="muted" style="font-size:.75rem">لسه مفيش تخصصات — اكتب أول تخصص تحت ودوس إضافة 👇</span>';
+  return list.map((sp, i) => `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--acc);color:#fff;padding:6px 12px;border-radius:20px;font-size:.8rem;font-weight:700">${esc(sp)}<button style="background:#ffffff33;border:none;color:#fff;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:.7rem;line-height:1" onclick="specDel(${i})">✕</button></span>`).join('');
+}
+function specAdd() {
+  const v = ($('#spec-new').value || '').trim();
+  if (!v) return toast('اكتب اسم التخصص الأول', 'err');
+  const list = (typeof tmpSpecs !== 'undefined' && tmpSpecs) ? tmpSpecs : (window.tmpSpecs = JSON.parse(JSON.stringify(DB.settings.specialties || [])));
+  if (list.includes(v)) { toast('التخصص ده موجود بالفعل', 'err'); return; }
+  list.push(v);
+  $('#spec-new').value = '';
+  $('#spec-chips').innerHTML = specChipsHtml();
+}
+function specDel(i) { tmpSpecs.splice(i, 1); $('#spec-chips').innerHTML = specChipsHtml(); }
 function stLogoChosen(inp) {
   const f = inp.files && inp.files[0]; if (!f) return;
   const r = new FileReader();
@@ -1241,6 +1347,7 @@ function curRateToggle() {
 }
 async function saveSet() {
   const s = DB.settings;
+  s.specialties = (typeof tmpSpecs !== 'undefined' && Array.isArray(tmpSpecs)) ? [...tmpSpecs] : (s.specialties || []);
   s.appName = $('#st-name').value.trim() || 'رواتب';
   s.theme = $('#st-theme').value;
   s.sig = $('#st-sig').value.trim();
@@ -1306,8 +1413,89 @@ function wipeAll() {
     <button class="btn btn-o" onclick="closeModal()">إلغاء</button></div>`);
 }
 
+/* ===================== لوحة التحكم — الأماكن واليوزرز ===================== */
+function vPanel() {
+  const places = DB.places || [];
+  return `
+  <div class="card">
+    <h3>🎛️ لوحة التحكم — الأماكن واليوزرز</h3>
+    <p class="muted" style="font-size:.78rem;margin-bottom:14px">كل مكان (شركة/فرع) ليه موظفين ويوزرز خاصين — اللي بيدخل بيوزر مكان <b>ميشوفش أي حاجة غير بيانات مكانه</b>. أنت كمالك تشوف وتتحكم في كل حاجة.</p>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <input class="inp" id="pl-name" placeholder="اسم المكان الجديد — مثال: شركة فلان، فرع المهندسين" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();plAdd()}">
+      <button class="btn btn-p btn-sm" onclick="plAdd()">➕ إضافة مكان</button>
+    </div>
+    ${places.length ? places.map(pl => {
+      const count = DB.employees.filter(e => e.placeId === pl.id).length;
+      return `<div style="border:1.5px solid var(--stroke);border-radius:14px;padding:14px;margin-bottom:12px;background:var(--bg2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <b style="font-size:1rem">🏢 ${esc(pl.name)}</b>
+          <span style="display:flex;gap:6px;align-items:center">
+            <span class="chip">${count} موظف</span>
+            <span class="chip">${(pl.users || []).length} يوزر</span>
+            <button class="btn btn-danger btn-sm" onclick="plDel('${pl.id}')">🗑️ حذف المكان</button>
+          </span>
+        </div>
+        <div style="font-size:.78rem;color:var(--muted);margin-bottom:6px">اليوزرز اللي بتديهم للمكان ده:</div>
+        ${(pl.users || []).length ? pl.users.map((u, i) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border:1px solid var(--stroke);border-radius:10px;padding:7px 12px;margin-bottom:6px">
+            <span>👤 <b>${esc(u.user)}</b></span>
+            <button class="btn btn-danger btn-sm" onclick="plDelUser('${pl.id}',${i})">حذف اليوزر</button>
+          </div>`).join('') : '<div class="muted" style="font-size:.75rem;margin-bottom:6px">لسه مفيش يوزرز للمكان ده 👇</div>'}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <input class="inp" id="plu-${pl.id}" placeholder="اسم المستخدم — مثال: ahmed" style="flex:1;min-width:130px" onkeydown="if(event.key==='Enter'){event.preventDefault();plAddUser('${pl.id}')}">
+          <input class="inp" id="plp-${pl.id}" type="password" placeholder="كلمة المرور" style="flex:1;min-width:110px" onkeydown="if(event.key==='Enter'){event.preventDefault();plAddUser('${pl.id}')}">
+          <button class="btn btn-p btn-sm" onclick="plAddUser('${pl.id}')">➕ يوزر</button>
+        </div>
+      </div>`;
+    }).join('') : '<div class="empty">لسه مفيش أماكن — اكتب اسم أول مكان فوق ودوس إضافة 👆</div>'}
+  </div>
+  <div class="card">
+    <h3>👀 إزاي النظام بيعزل البيانات؟</h3>
+    <p class="muted" style="font-size:.8rem;line-height:2">
+    1. كل موظف بيتسجل على مكان معين (من نافذة الموظف أو تلقائيًا لو اليوزر نفسه تابع لمكان).<br>
+    2. اللي بيدخل بيوزر مكان — بيشوف الموظفين والرواتب والتقارير بتاعة مكانه <b>بس</b>، وميعرفش يفتح الإعدادات ولا اللوحة دي.<br>
+    3. أنت كمالك (سيب اسم المستخدم فاضي واكتب بس كلمة المرور) — بتشوف كل الأماكن وكل البيانات، وتقدر تحرك أي موظف من مكان لمكان من صفحته.<br>
+    4. البيانات كلها على نفس السحابة — العزل في العرض حسب الجلسة، فخلي كلمات مرور اليوزرز سرية.</p>
+  </div>`;
+}
+async function plAdd() {
+  const name = ($('#pl-name').value || '').trim();
+  if (!name) return toast('اكتب اسم المكان', 'err');
+  if ((DB.places || []).some(p => p.name === name)) return toast('في مكان بنفس الاسم already', 'err');
+  DB.places.push({ id: uid('pl'), name, users: [], createdAt: Date.now() });
+  save(); render(); toast('✅ اتضاف المكان — ضيف له يوزرز تحته');
+}
+async function plAddUser(placeId) {
+  const pl = (DB.places || []).find(x => x.id === placeId); if (!pl) return;
+  const un = ($('#plu-' + placeId).value || '').trim().toLowerCase().replace(/\s+/g, '');
+  const pw = $('#plp-' + placeId).value;
+  if (!un) return toast('اكتب اسم المستخدم', 'err');
+  if (un === 'admin') return toast('«admin» محجوز للمالك — اختار اسم تاني', 'err');
+  if (pw.length < 4) return toast('كلمة المرور 4 حروف على الأقل', 'err');
+  let taken = false;
+  (DB.places || []).forEach(p => (p.users || []).forEach(u => { if (u.user === un) taken = true; }));
+  if (taken) return toast('الاسم ده مستخدم already — اختار اسم تاني', 'err');
+  pl.users = pl.users || [];
+  pl.users.push({ user: un, hash: await hash(un + '::' + pw) });
+  save(); render(); toast('✅ اتعمل اليوزر — ابعته للمكان: ' + un);
+}
+function plDelUser(placeId, i) {
+  const pl = (DB.places || []).find(x => x.id === placeId); if (!pl || !pl.users[i]) return;
+  if (!confirm('تحذف يوزر «' + pl.users[i].user + '»؟ مش هيعرف يدخل تاني.')) return;
+  pl.users.splice(i, 1);
+  save(); render(); toast('اتحذف اليوزر');
+}
+function plDel(placeId) {
+  const pl = (DB.places || []).find(x => x.id === placeId); if (!pl) return;
+  const count = DB.employees.filter(e => e.placeId === placeId).length;
+  if (!confirm('تحذف مكان «' + pl.name + '»' + (count ? ' — فيه ' + count + ' موظف هيتحولوا لـ«بدون مكان» (مش هيتحذفوا)' : '') + '؟')) return;
+  DB.employees.forEach(e => { if (e.placeId === placeId) { e.placeId = null; e.updatedAt = Date.now(); } });
+  DB.places = DB.places.filter(x => x.id !== placeId);
+  save(); render(); toast('اتحذف المكان');
+}
+
 /* ===================== تشغيل ===================== */
 $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+const unEl0 = $('#un'); if (unEl0) unEl0.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 load();
 cloudSessionWatch();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
