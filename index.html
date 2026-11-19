@@ -475,7 +475,7 @@ function vEmps() {
       <div class="emp-row">
         ${e.photo ? `<div class="av" style="padding:0;overflow:hidden"><img src="${e.photo}" alt="" style="width:100%;height:100%;object-fit:cover"></div>` : `<div class="av">${esc(e.name.trim()[0] || '؟')}</div>`}
         <div class="info"><b style="cursor:pointer;color:var(--acc)" onclick="empProfile('${e.id}')">${esc(e.name)} 👤</b>
-          <span>الراتب: ${fmt(e.salary)} ج.م${e.phone ? ' · 📱 ' + esc(e.phone) : ''}${e.qr ? ' · 📷 له QR تحويل' : ''}${e.active === false ? ' · متوقف' : ''}</span></div>
+          <span>الراتب: ${fmt(e.salary)} ج.م${e.phone ? ' · 📱 ' + esc(e.phone) : ''}${e.qr ? ' · 📷 له QR تحويل' : ''}${shiftOf(e) ? ' · ⏱ ' + esc(shiftLabel(e)) : ''}${e.active === false ? ' · متوقف' : ''}</span></div>
         <div class="rowbtns">
           <button class="btn btn-o btn-sm" onclick="empModal('${e.id}')">تعديل</button>
           <button class="btn btn-danger btn-sm" onclick="delEmp('${e.id}')">حذف</button>
@@ -519,6 +519,12 @@ function vEmpProfile(id) {
     <p class="muted" style="font-size:.72rem;margin-top:10px">⚠️ الحقول دي بتتغير من هنا بس — بتتحفظ في ملف الموظف وعلى السحابة.</p>
     <button class="btn btn-p" style="width:100%;margin-top:10px" onclick="saveEmpProfile('${e.id}')">💾 حفظ بيانات الملف</button>
   </div>
+  ${shiftOf(e) ? `
+  <div class="card">
+    <h3>⏱ جدول الشيفت</h3>
+    <div class="netpill">${esc(shiftLabel(e))}<small>${shiftInfoLine(e, e.salary)}</small></div>
+    <button class="btn btn-o btn-sm" style="margin-top:10px" onclick="empModal('${e.id}')">تعديل الجدول</button>
+  </div>` : ''}
   <div class="card">
     <h3>🧾 آخر قبض</h3>
     ${last ? `
@@ -570,10 +576,45 @@ function empModal(id) {
         </div>
       </div>
     </div>
+    <div class="field" style="margin-top:6px"><label>⏱ جدول الشيفت <span style="font-weight:400;color:var(--muted);font-size:.72rem">(اختياري — لو حابب تحسب المرتب بالساعات)</span></label>
+      <div class="grid2" style="margin-bottom:8px">
+        <div class="field" style="margin:0"><label>نوع الشيفت</label>
+          <select class="inp" id="em-shtype" onchange="shTypeChange()">
+            <option value="">بدون جدول — احسب بالأيام زي الأول</option>
+            <option value="morning" ${e && e.shift && e.shift.type === 'morning' ? 'selected' : ''}>صباحي ☀️</option>
+            <option value="evening" ${e && e.shift && e.shift.type === 'evening' ? 'selected' : ''}>مسائي 🌆</option>
+            <option value="night" ${e && e.shift && e.shift.type === 'night' ? 'selected' : ''}>سهر 🌙</option>
+            <option value="custom" ${e && e.shift && e.shift.type === 'custom' ? 'selected' : ''}>مخصص ⚙️</option>
+          </select></div>
+        <div class="field" style="margin:0"><label>عدد ساعات الشيفت</label><input class="inp" id="em-shhours" inputmode="decimal" placeholder="مثال: 7" value="${e && e.shift ? (e.shift.hours || '') : ''}"></div>
+      </div>
+      <div class="grid2" style="margin-bottom:8px">
+        <div class="field" style="margin:0"><label>من</label><input type="time" class="inp" id="em-shfrom" value="${e && e.shift ? (e.shift.from || '') : ''}" onchange="shTimeChange()"></div>
+        <div class="field" style="margin:0"><label>إلى</label><input type="time" class="inp" id="em-shto" value="${e && e.shift ? (e.shift.to || '') : ''}" onchange="shTimeChange()"></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${DOWS.map(d => `<label style="display:flex;align-items:center;gap:4px;font-size:.8rem;padding:6px 10px;border-radius:8px;border:1px solid var(--stroke);background:var(--bg2)"><input type="checkbox" class="shday" value="${d[0]}" ${e && e.shift && (e.shift.days || []).includes(d[0]) ? 'checked' : ''}> ${d[1]}</label>`).join('')}
+      </div>
+      <div id="em-shhint" style="font-size:.72rem;color:var(--muted);margin-top:8px">${e && shiftOf(e) ? shiftLabel(e) : 'من غير جدول، الخصم بيتحسب بالأيام زي الأول'}</div>
+    </div>
     <div class="rowbtns">
       <button class="btn btn-p" style="flex:1" onclick="saveEmp('${e ? e.id : ''}')">💾 حفظ</button>
       <button class="btn btn-o" onclick="closeModal()">إلغاء</button>
     </div>`);
+}
+/* اختيار نوع الشيفت الجاهز بيعبى المعاد تلقائي */
+function shTypeChange() {
+  const t = $('#em-shtype').value;
+  if (SHIFT_PRESETS[t]) { $('#em-shfrom').value = SHIFT_PRESETS[t].from; $('#em-shto').value = SHIFT_PRESETS[t].to; }
+  shTimeChange();
+  $('#em-shhint').textContent = t ? 'عدّل الأيام والمعاد على مزاجك — النوع ده مجرد اقتراح جاهز' : 'من غير جدول، الخصم بيتحسب بالأيام زي الأول';
+}
+/* من/إلى بيحسبوا عدد الساعات لوحدهم */
+function shTimeChange() {
+  const f = $('#em-shfrom').value, t = $('#em-shto').value;
+  const h = hoursBetween(f, t);
+  if (h > 0) $('#em-shhours').value = h;
+  $('#em-shhint').textContent = h > 0 ? ('الشيفت: ' + (f || '—') + ' → ' + (t || '—') + ' = ' + h + ' ساعات — علّم أيام العمل تحت') : 'اكتب معاد الشيفت من وإلى';
 }
 let tmpQr = null;
 function qrChosen(inp) {
@@ -609,14 +650,20 @@ function saveEmp(id) {
   if (!salary) return toast('اكتب الراتب الأساسي', 'err');
   const phone = $('#em-phone').value.trim();
   const qrLabel = $('#em-qrlabel').value.trim();
+  const shType = $('#em-shtype').value;
+  const shDays = [...document.querySelectorAll('.shday:checked')].map(x => x.value);
+  const shFrom = $('#em-shfrom').value, shTo = $('#em-shto').value;
+  let shH = num($('#em-shhours').value);
+  if (!shH) shH = hoursBetween(shFrom, shTo);
+  const shift = (shType && shDays.length && shH > 0) ? { type: shType, from: shFrom, to: shTo, hours: shH, days: shDays } : null;
   if (id) {
     const e = DB.employees.find(x => x.id === id);
-    Object.assign(e, { name, salary, phone, qrLabel });
+    Object.assign(e, { name, salary, phone, qrLabel, shift });
     if (tmpQr !== null) e.qr = tmpQr || '';
     if (tmpPhoto !== null) e.photo = tmpPhoto || '';
     e.updatedAt = Date.now();
   } else {
-    DB.employees.push({ id: uid(), name, salary, phone, qrLabel, qr: tmpQr || '', photo: tmpPhoto || '', active: true, createdAt: Date.now(), updatedAt: Date.now() });
+    DB.employees.push({ id: uid(), name, salary, phone, qrLabel, shift, qr: tmpQr || '', photo: tmpPhoto || '', active: true, createdAt: Date.now(), updatedAt: Date.now() });
   }
   save(); tmpQr = null; tmpPhoto = null; closeModal(); render();
   toast('تم الحفظ ✅', 'ok');
@@ -659,6 +706,48 @@ function fridaysIn(m) {
 function workDays(m) { return monthDays(m) - fridaysIn(m); }
 function dayWage(salary, m) { return Math.round((num(salary) / workDays(m)) * 100) / 100; }
 function wageHint(salary) { return workDays(CUR.payMonth) + ' يوم عمل في ' + monthLabel(CUR.payMonth) + ' — قيمة اليوم: ' + fmt(dayWage(salary, CUR.payMonth)) + ' ج.م'; }
+/* ===================== الشيفتات والساعات ===================== */
+const SHIFT_TYPES = { morning: 'صباحي ☀️', evening: 'مسائي 🌆', night: 'سهر 🌙', custom: 'مخصص ⚙️' };
+const SHIFT_PRESETS = { morning: { from: '09:00', to: '16:00' }, evening: { from: '16:00', to: '23:00' }, night: { from: '22:00', to: '06:00' }, custom: { from: '', to: '' } };
+const DOWS = [['sat', 'السبت'], ['sun', 'الأحد'], ['mon', 'الاثنين'], ['tue', 'الثلاثاء'], ['wed', 'الأربعاء'], ['thu', 'الخميس'], ['fri', 'الجمعة']];
+const DOW_IDX = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+function shiftOf(e) { return (e && e.shift && e.shift.days && e.shift.days.length) ? e.shift : null; }
+/* الفرق بالساعات بين معادين — بيدعم الشيفت اللي بيعدي منتصف الليل (السهر) */
+function hoursBetween(from, to) {
+  if (!from || !to) return 0;
+  const fh = +from.split(':')[0], fm = +from.split(':')[1] || 0, th = +to.split(':')[0], tm = +to.split(':')[1] || 0;
+  let d = (th * 60 + tm) - (fh * 60 + fm);
+  if (d <= 0) d += 24 * 60;
+  return Math.round(d / 60 * 100) / 100;
+}
+function shiftHours(sh) { if (!sh) return 0; return num(sh.hours) || hoursBetween(sh.from, sh.to); }
+function shiftLabel(e) {
+  const sh = shiftOf(e); if (!sh) return '';
+  const days = (sh.days || []).map(d => (DOWS.find(x => x[0] === d) || [d, d])[1]).join('، ');
+  const t = SHIFT_TYPES[sh.type] || 'مخصص ⚙️';
+  const tm = (sh.from && sh.to) ? ' من ' + sh.from + ' لـ ' + sh.to : '';
+  return t + tm + ' · ' + days + ' · ' + shiftHours(sh) + ' ساعة/يوم';
+}
+/* عدد أيام الشيفت في شهر معين */
+function shiftDayCount(m, days) {
+  const [y, mm] = m.split('-').map(Number);
+  const n = new Date(y, mm, 0).getDate();
+  let c = 0;
+  for (let d = 1; d <= n; d++) {
+    const js = new Date(y, mm - 1, d).getDay();
+    const k = Object.keys(DOW_IDX).find(k2 => DOW_IDX[k2] === js);
+    if (days.includes(k)) c++;
+  }
+  return c;
+}
+function expectedHours(e, m) { const sh = shiftOf(e); return sh ? Math.round(shiftDayCount(m, sh.days) * shiftHours(sh) * 100) / 100 : 0; }
+/* سعر الساعة = الراتب ÷ الساعات المفترضة في الشهر */
+function hourRate(e, m, salary) { const eh = expectedHours(e, m); return eh ? Math.round(num(salary) / eh * 100) / 100 : 0; }
+function shiftInfoLine(e, salary) {
+  const m = CUR.payMonth || curMonth();
+  const eh = expectedHours(e, m);
+  return 'المفترض ' + eh + ' ساعة في ' + monthLabel(m) + ' · سعر الساعة: ' + fmt(hourRate(e, m, salary)) + ' ج.م — الخصم من فرق الساعات';
+}
 function payCard(e) {
   const p = payOf(e.id, CUR.payMonth);
   const salary = p ? p.salary : e.salary;
@@ -678,8 +767,11 @@ function payCard(e) {
     </div>
     <div class="grid2">
       <div class="field"><label>الراتب (ج.م)</label><input class="inp pc-inp" inputmode="decimal" id="s-${e.id}" value="${salary}" oninput="salChanged('${e.id}')"></div>
+      ${shiftOf(e) ? `
+      <div class="field"><label>⏱ ساعات الحضور الفعلية</label><input class="inp" inputmode="decimal" id="h-${e.id}" value="${p && p.hoursAtt != null ? p.hoursAtt : expectedHours(e, CUR.payMonth)}" oninput="hoursChanged('${e.id}')">
+        <div style="font-size:.72rem;color:var(--muted);margin-top:5px;line-height:1.7" id="aw-${e.id}">${shiftInfoLine(e, salary)}</div></div>` : `
       <div class="field"><label>أيام الغياب — الجُمُع مش محسوبة ✅</label><input class="inp" inputmode="numeric" id="a-${e.id}" value="${p && p.absDays ? p.absDays : ''}" placeholder="0" oninput="absChanged('${e.id}')">
-        <div style="font-size:.72rem;color:var(--muted);margin-top:5px;line-height:1.7" id="aw-${e.id}">${wageHint(salary)}</div></div>
+        <div style="font-size:.72rem;color:var(--muted);margin-top:5px;line-height:1.7" id="aw-${e.id}">${wageHint(salary)}</div></div>`}
       <div class="field"><label>الخصم (ج.م) — بيتحسب تلقائي من الأيام</label><input class="inp pc-inp" inputmode="decimal" id="d-${e.id}" value="${deduction || ''}" placeholder="0" oninput="dedToggled('${e.id}');calcNet('${e.id}')"></div>
       <div class="field" id="fr-${e.id}"><label>سبب الخصم ${num(deduction) ? '' : '🔒 (اتفتح لما تكتب خصم)'}</label><input class="inp" id="r-${e.id}" value="${esc(reason)}" placeholder="مثال: غياب يومين" ${num(deduction) ? '' : 'disabled'}></div>
       <div class="field"><label>مكافأة (ج.م)</label><input class="inp pc-inp" inputmode="decimal" id="b-${e.id}" value="${bonus || ''}" placeholder="0" oninput="calcNet('${e.id}')"></div>
@@ -719,14 +811,39 @@ function absChanged(empId) {
   }
   dedToggled(empId); calcNet(empId);
 }
+/* لما تسجل الساعات الفعلية: الخصم = فرق الساعات عن المفترض × سعر الساعة */
+function hoursChanged(empId) {
+  const e = DB.employees.find(x => x.id === empId); if (!e || !shiftOf(e)) return;
+  let att = num($('#h-' + empId).value);
+  const exp = expectedHours(e, CUR.payMonth);
+  if (att < 0) att = 0;
+  if (att > exp) { $('#h-' + empId).value = exp; toast('أقصى ساعات مفترضة في الشهر ده ' + exp + ' ساعة', 'err'); att = exp; }
+  const diff = Math.max(0, Math.round((exp - att) * 100) / 100);
+  const dEl = $('#d-' + empId);
+  if (diff > 0) {
+    dEl.value = Math.round(diff * hourRate(e, CUR.payMonth, $('#s-' + empId).value) * 100) / 100;
+    const rEl = $('#r-' + empId);
+    if (!rEl.value.trim()) rEl.value = 'فرق ' + diff + ' ساعات عن المفترض';
+  } else {
+    dEl.value = '';
+  }
+  dedToggled(empId); calcNet(empId);
+}
 /* لو الراتب اتغير والأيام مكتوبة: يعيد حساب الخصم بقيمة اليوم الجديدة */
 function salChanged(empId) {
+  const e = DB.employees.find(x => x.id === empId);
   const aEl = $('#a-' + empId);
   if (aEl && num(aEl.value) > 0) {
     $('#d-' + empId).value = Math.round(num(aEl.value) * dayWage($('#s-' + empId).value, CUR.payMonth) * 100) / 100;
     dedToggled(empId);
   }
-  $('#aw-' + empId).textContent = wageHint($('#s-' + empId).value);
+  const hEl = $('#h-' + empId);
+  if (hEl && shiftOf(e)) {
+    hoursChanged(empId);
+    $('#aw-' + empId).textContent = shiftInfoLine(e, $('#s-' + empId).value);
+  } else {
+    $('#aw-' + empId).textContent = wageHint($('#s-' + empId).value);
+  }
   calcNet(empId);
 }
 function bindPayCalc() {}
@@ -739,7 +856,9 @@ function savePay(empId) {
   if (d > 0 && !reason) return toast('اكتب سبب الخصم', 'err');
   if (d > s) return toast('الخصم أكبر من الراتب!', 'err');
   const ex = payOf(empId, CUR.payMonth);
-  const rec = { id: ex ? ex.id : uid(), empId, month: CUR.payMonth, salary: s, deduction: d, deductReason: d ? reason : '', bonus: b, net: s - d + b, payDate: dt, absDays: num($('#a-' + empId).value), updatedAt: Date.now() };
+  const e0 = DB.employees.find(x => x.id === empId);
+  const aEl = $('#a-' + empId), hEl = $('#h-' + empId);
+  const rec = { id: ex ? ex.id : uid(), empId, month: CUR.payMonth, salary: s, deduction: d, deductReason: d ? reason : '', bonus: b, net: s - d + b, payDate: dt, absDays: aEl ? num(aEl.value) : 0, hoursExp: hEl && e0 ? expectedHours(e0, CUR.payMonth) : null, hoursAtt: hEl ? num(hEl.value) : null, updatedAt: Date.now() };
   if (ex) Object.assign(ex, rec); else DB.pays.push(rec);
   save(); render(); toast('تم حفظ القبض ✅', 'ok');
 }
